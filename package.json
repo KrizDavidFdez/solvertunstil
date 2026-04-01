@@ -1,0 +1,20 @@
+{
+  "name": "easy-peasy-client",
+  "version": "1.0.0",
+  "description": "Script para generar frases usando la API de Easy Peasy AI",
+  "main": "set.js",
+  "scripts": {
+    "start": "node start"
+  },
+  "dependencies": {
+  "node-fetch": "^2.6.7",
+  "axios": "^1.6.0",
+  "express": "latest",
+  "bycf": "latest"
+},
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {},
+  "keywords": []
+}
+
