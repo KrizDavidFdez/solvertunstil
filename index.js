@@ -765,7 +765,28 @@ app.get("/", (req, res) => {
 /* =========================
    API ENDPOINT
 ========================= */
-app.all("/turnstile-solver", async (req, res) => {
+
+app.all('/turnstile-solver', async (req, res) => {
+    const allowedMethods = ['GET', 'POST', 'PUT'];
+    if (!allowedMethods.includes(req.method)) {
+        return res.status(405).json({ error: '🚩 Método no permitido' });
+    }
+    const url = req.query.url || req.body.url;
+    const siteKey = req.query.siteKey || req.body.siteKey;
+
+    try {
+        const result = await shannz.turnstileMin(url, siteKey);
+        
+        if (result) {
+            return res.json({ success: true, data: result });
+        } else {
+            return res.status(500).json({ success: false, message: '' });
+        }
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+/*app.all("/turnstile-solver", async (req, res) => {
   const allowedMethods = ["GET", "POST", "PUT"];
 
   if (!allowedMethods.includes(req.method)) {
@@ -819,7 +840,7 @@ app.all("/turnstile-solver", async (req, res) => {
     });
   }
 });
-
+*/
 /* =========================
    INFO GENERAL API
 ========================= */
