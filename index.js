@@ -566,7 +566,7 @@ app.get("/api", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(\`🚀 Servidor corriendo en http://localhost:\${PORT}\`);
-  console.log(\`🌐 Playground: http://localhost:\${PORT}/\`);
-  console.log(\`📡 Endpoint: http://localhost:\${PORT}/turnstile-solver\`);
+  console.log(`🚀 Servidor corriendo en http://localhost: ${PORT}`);
+  console.log(`🌐 Playground: http://localhost:${PORT}`);
+  console.log(`📡 Endpoint: http://localhost: ${PORT}/turnstile-solver`);
 });
