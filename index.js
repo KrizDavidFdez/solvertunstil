@@ -1,63 +1,6 @@
-/*const express = require('express');
-const app = express();
-const PORT = 3000;
-
-
-app.use(express.json());
-
-const BASE_URL_BYPASS = 'https://shannz.zone.id';
-
-async function callBypassAPI(endpoint, data = {}) {
-    const url = `${BASE_URL_BYPASS}/api/${endpoint.trim()}`;
-    try {
-        const response = await fetch(url, {
-            method: endpoint === 'stats' ? 'GET' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: endpoint === 'stats' ? null : JSON.stringify(data)
-        });
-        const json = await response.json();
-        return json.success ? json.data : null;
-    } catch (e) {
-        console.error("Error en callBypassAPI:", e.message);
-        return null;
-    }
-}
-
-const shannz = {
-    turnstileMin: (url, siteKey) => callBypassAPI('solve-turnstile-min', { url, siteKey })
-};
-
-
-app.all('/turnstile-solver', async (req, res) => {
-    const allowedMethods = ['GET', 'POST', 'PUT'];
-    if (!allowedMethods.includes(req.method)) {
-        return res.status(405).json({ error: '🚩 Método no permitido' });
-    }
-    const url = req.query.url || req.body.url;
-    const siteKey = req.query.siteKey || req.body.siteKey;
-
-    try {
-        const result = await shannz.turnstileMin(url, siteKey);
-        
-        if (result) {
-            return res.json({ success: true, data: result });
-        } else {
-            return res.status(500).json({ success: false, message: '' });
-        }
-    } catch (error) {
-        return res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.listen(PORT, () => {
-    console.log(`--- Servidor corriendo en http://localhost:${PORT} ---`);
-    console.log(`Endpoint listo: /turnstile-solver (GET/POST/PUT)`);
-});
-*/
-
 const express = require("express");
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -100,332 +43,665 @@ const shannz = {
 };
 
 /* =========================
-   UI PRINCIPAL
+   UI PRINCIPAL PROFESIONAL
 ========================= */
 app.get("/", (req, res) => {
-  res.send(`
-<!DOCTYPE html>
+  res.send(`<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Turnstile Solver API</title>
+  <meta name="description" content="Professional API Playground for Turnstile Solver" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg: #050505;
+      --bg-soft: rgba(255, 255, 255, 0.035);
+      --bg-soft-2: rgba(255, 255, 255, 0.055);
+      --stroke: rgba(255, 255, 255, 0.09);
+      --stroke-2: rgba(255, 255, 255, 0.14);
+      --text: #ffffff;
+      --muted: rgba(255, 255, 255, 0.68);
+      --muted-2: rgba(255, 255, 255, 0.45);
+      --accent: #ffffff;
+      --shadow: 0 20px 80px rgba(0, 0, 0, 0.45);
+      --radius: 24px;
+      --radius-sm: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
     * {
       box-sizing: border-box;
     }
 
+    html {
+      scroll-behavior: smooth;
+    }
+
     body {
       margin: 0;
-      font-family: Inter, Arial, sans-serif;
-      background: linear-gradient(135deg, #0f172a, #111827, #1e293b);
-      color: #fff;
+      font-family: "Inter", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.05), transparent 28%),
+        radial-gradient(circle at top right, rgba(255,255,255,0.03), transparent 25%),
+        radial-gradient(circle at bottom, rgba(255,255,255,0.02), transparent 30%),
+        linear-gradient(180deg, #030303 0%, #080808 45%, #050505 100%);
+      color: var(--text);
       min-height: 100vh;
-      padding: 30px 16px;
+      overflow-x: hidden;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.04;
+      background-image:
+        radial-gradient(circle at 20% 20%, white 0.6px, transparent 0.8px),
+        radial-gradient(circle at 80% 40%, white 0.6px, transparent 0.8px),
+        radial-gradient(circle at 60% 80%, white 0.6px, transparent 0.8px);
+      background-size: 180px 180px;
+      z-index: 0;
     }
 
     .container {
-      max-width: 1100px;
+      position: relative;
+      z-index: 1;
+      max-width: 1320px;
       margin: 0 auto;
+      padding: 42px 18px 60px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+      padding: 18px 22px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.03);
+      backdrop-filter: blur(16px);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background:
+        linear-gradient(145deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04));
+      border: 1px solid rgba(255,255,255,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: white;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      color: var(--muted-2);
+      font-size: 13px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: #ffffff;
+      box-shadow: 0 0 14px rgba(255,255,255,0.7);
     }
 
     .hero {
-      text-align: center;
-      margin-bottom: 28px;
+      margin-bottom: 26px;
+      padding: 34px 30px;
+      border-radius: 30px;
+      border: 1px solid var(--stroke);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
     }
 
-    .badge {
-      display: inline-block;
-      padding: 8px 14px;
-      border-radius: 999px;
-      background: rgba(59, 130, 246, 0.15);
-      color: #93c5fd;
-      font-size: 14px;
-      border: 1px solid rgba(59, 130, 246, 0.25);
-      margin-bottom: 16px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 42px;
-      line-height: 1.1;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-
-    .sub {
-      margin-top: 14px;
-      color: #cbd5e1;
-      font-size: 17px;
-      max-width: 700px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 20px;
-      margin-top: 30px;
-    }
-
-    .card {
-      background: rgba(15, 23, 42, 0.78);
+    .hero-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 22px;
-      padding: 22px;
-      box-shadow: 0 15px 50px rgba(0,0,0,0.25);
-      backdrop-filter: blur(12px);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 18px;
     }
 
-    .card h2 {
-      margin-top: 0;
+    .hero h2 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 62px);
+      line-height: 0.98;
+      letter-spacing: -0.05em;
+      font-weight: 800;
+      max-width: 880px;
+    }
+
+    .hero p {
+      margin-top: 18px;
+      font-size: 16px;
+      line-height: 1.8;
+      color: var(--muted);
+      max-width: 820px;
+    }
+
+    .hero-actions {
+      margin-top: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .button {
+      appearance: none;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 14px 18px;
+      border-radius: 16px;
+      font-size: 14px;
+      font-weight: 700;
+      transition: transform .18s ease, opacity .18s ease, background .18s ease, border-color .18s ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button-primary {
+      background: #ffffff;
+      color: #000000;
+      box-shadow: 0 10px 40px rgba(255,255,255,0.08);
+    }
+
+    .button-secondary {
+      background: rgba(255,255,255,0.045);
+      color: #ffffff;
+      border: 1px solid rgba(255,255,255,0.09);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .panel {
+      border-radius: var(--radius);
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.03);
+      backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 24px 24px 0;
+    }
+
+    .panel-title {
+      margin: 0;
       font-size: 22px;
-      margin-bottom: 14px;
+      letter-spacing: -0.03em;
+      font-weight: 750;
     }
 
-    .card p {
-      color: #cbd5e1;
-      line-height: 1.6;
+    .panel-subtitle {
+      margin-top: 8px;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .panel-body {
+      padding: 24px;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 16px;
     }
 
     .field {
-      margin-bottom: 16px;
+      display: grid;
+      gap: 10px;
     }
 
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 14px;
-      color: #cbd5e1;
+    .field label {
+      font-size: 13px;
       font-weight: 600;
+      color: rgba(255,255,255,0.85);
+      letter-spacing: 0.01em;
     }
 
     input, select, textarea {
       width: 100%;
-      padding: 14px 16px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.04);
-      color: #fff;
-      outline: none;
-      font-size: 15px;
-      transition: 0.2s ease;
-    }
-
-    input:focus, select:focus, textarea:focus {
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 4px rgba(59,130,246,0.15);
-    }
-
-    textarea {
-      min-height: 160px;
-      resize: vertical;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    }
-
-    .btns {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-
-    button {
-      border: none;
-      border-radius: 14px;
-      padding: 13px 18px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: 0.2s ease;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #2563eb, #3b82f6);
-      color: white;
-      box-shadow: 0 10px 30px rgba(37, 99, 235, 0.35);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      opacity: 0.96;
-    }
-
-    .btn-secondary {
-      background: rgba(255,255,255,0.08);
-      color: white;
       border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255,255,255,0.12);
-    }
-
-    .mini-grid {
-      display: grid;
-      gap: 14px;
-    }
-
-    .mini-box {
       background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 18px;
-      padding: 16px;
-    }
-
-    .mini-box h3 {
-      margin: 0 0 8px;
-      font-size: 16px;
-    }
-
-    .code {
-      background: #020617;
-      color: #93c5fd;
+      color: #ffffff;
       border-radius: 16px;
-      padding: 16px;
-      overflow: auto;
+      padding: 15px 16px;
       font-size: 14px;
-      line-height: 1.5;
-      border: 1px solid rgba(255,255,255,0.06);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: rgba(255,255,255,0.35);
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.055);
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.035);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .code-wrap {
+      margin-top: 18px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .code-card {
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.28);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    .code-top {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .code-top strong {
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      color: rgba(255,255,255,0.88);
+    }
+
+    .copy-btn {
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: white;
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    pre {
+      margin: 0;
+      padding: 18px;
+      overflow: auto;
+      color: rgba(255,255,255,0.92);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.75;
       white-space: pre-wrap;
       word-break: break-word;
     }
 
-    .footer {
-      margin-top: 26px;
-      text-align: center;
-      color: #94a3b8;
+    .stack {
+      display: grid;
+      gap: 22px;
+    }
+
+    .mini-card {
+      padding: 22px;
+      border-radius: 24px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.03);
+      backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+    }
+
+    .mini-card h3 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      letter-spacing: -0.03em;
+    }
+
+    .mini-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.8;
       font-size: 14px;
     }
 
-    .success {
-      color: #4ade80;
+    .api-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
     }
 
-    .danger {
-      color: #f87171;
+    .api-item {
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      border-radius: 18px;
+      padding: 14px 15px;
     }
 
-    @media (max-width: 900px) {
-      .grid {
+    .method {
+      display: inline-flex;
+      min-width: 58px;
+      justify-content: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
+      margin-right: 10px;
+    }
+
+    .path {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: rgba(255,255,255,0.95);
+    }
+
+    .footer {
+      margin-top: 28px;
+      padding: 18px 20px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.03);
+      border-radius: 20px;
+      color: var(--muted-2);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .muted {
+      color: var(--muted-2);
+    }
+
+    .response-success {
+      color: #ffffff;
+    }
+
+    .response-error {
+      color: #ffb4b4;
+    }
+
+    @media (max-width: 1024px) {
+      .layout {
         grid-template-columns: 1fr;
       }
+    }
 
-      h1 {
-        font-size: 32px;
+    @media (max-width: 680px) {
+      .container {
+        padding: 18px 14px 40px;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .hero {
+        padding: 24px 20px;
+      }
+
+      .panel-body,
+      .panel-header,
+      .mini-card {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+
+      .hero h2 {
+        font-size: 34px;
       }
     }
   </style>
 </head>
 <body>
+  <div class="noise"></div>
+
   <div class="container">
-    <div class="hero">
-      <div class="badge">⚡ API Playground</div>
-      <h1>Turnstile Solver API</h1>
-      <div class="sub">
-        Prueba tu endpoint desde una interfaz limpia, profesional y funcional.
-        Soporta <b>GET</b>, <b>POST</b> y <b>PUT</b>, mostrando tanto la petición como la respuesta.
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">TS</div>
+        <div>
+          <h1>Turnstile Solver API</h1>
+          <p>Production-style interface for testing and documentation</p>
+        </div>
+      </div>
+      <div class="status">
+        <span class="status-dot"></span>
+        Service Available
       </div>
     </div>
 
-    <div class="grid">
-      <div class="card">
-        <h2>🚀 Probar Endpoint</h2>
-        <p>Completa los campos y envía la solicitud directamente a tu API.</p>
-
-        <div class="field">
-          <label>Método HTTP</label>
-          <select id="method">
-            <option value="GET">GET</option>
-            <option value="POST" selected>POST</option>
-            <option value="PUT">PUT</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>URL objetivo</label>
-          <input id="url" placeholder="https://ejemplo.com" />
-        </div>
-
-        <div class="field">
-          <label>Site Key</label>
-          <input id="siteKey" placeholder="0x4AAAA..." />
-        </div>
-
-        <div class="btns">
-          <button class="btn-primary" onclick="sendRequest()">Enviar solicitud</button>
-          <button class="btn-secondary" onclick="fillDemo()">Cargar demo</button>
-          <button class="btn-secondary" onclick="clearAll()">Limpiar</button>
-        </div>
-
-        <div style="margin-top: 24px;">
-          <h2 style="font-size:18px;">📤 Request generado</h2>
-          <div class="code" id="requestBox">Esperando solicitud...</div>
-        </div>
-
-        <div style="margin-top: 20px;">
-          <h2 style="font-size:18px;">📥 Respuesta</h2>
-          <div class="code" id="responseBox">Esperando respuesta...</div>
-        </div>
+    <section class="hero">
+      <div class="hero-label">API Playground</div>
+      <h2>Elegant interface for testing your Turnstile endpoint.</h2>
+      <p>
+        Send requests directly from the browser using GET, POST or PUT.
+        Inspect payloads, preview responses and document the endpoint with a clean, professional dark interface.
+      </p>
+      <div class="hero-actions">
+        <button class="button button-primary" onclick="scrollToPlayground()">Open Playground</button>
+        <button class="button button-secondary" onclick="fillDemo()">Load Example</button>
       </div>
+    </section>
 
-      <div class="mini-grid">
-        <div class="card">
-          <h2>📘 Endpoint</h2>
-          <div class="mini-box">
-            <h3>/turnstile-solver</h3>
-            <p>Endpoint principal para resolver Turnstile usando el servicio externo.</p>
-          </div>
-          <div class="mini-box">
-            <h3>Métodos soportados</h3>
-            <p><span class="success">GET</span>, <span class="success">POST</span>, <span class="success">PUT</span></p>
+    <div class="layout">
+      <section class="panel" id="playground">
+        <div class="panel-header">
+          <h3 class="panel-title">Request Playground</h3>
+          <div class="panel-subtitle">
+            Test the endpoint in real time and inspect the exact request and response.
           </div>
         </div>
 
-        <div class="card">
-          <h2>🧪 Ejemplo GET</h2>
-          <div class="code">/turnstile-solver?url=https://ejemplo.com&siteKey=0x4AAAA...</div>
+        <div class="panel-body">
+          <div class="form-grid">
+            <div class="field">
+              <label>HTTP Method</label>
+              <select id="method">
+                <option value="GET">GET</option>
+                <option value="POST" selected>POST</option>
+                <option value="PUT">PUT</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Target URL</label>
+              <input id="url" placeholder="https://example.com" />
+            </div>
+
+            <div class="field">
+              <label>Site Key</label>
+              <input id="siteKey" placeholder="0x4AAAA..." />
+            </div>
+
+            <div class="actions">
+              <button class="button button-primary" onclick="sendRequest()">Send Request</button>
+              <button class="button button-secondary" onclick="fillDemo()">Load Demo</button>
+              <button class="button button-secondary" onclick="clearAll()">Clear</button>
+            </div>
+          </div>
+
+          <div class="code-wrap">
+            <div class="code-card">
+              <div class="code-top">
+                <strong>Generated Request</strong>
+                <button class="copy-btn" onclick="copyText('requestBox')">Copy</button>
+              </div>
+              <pre id="requestBox">Waiting for request...</pre>
+            </div>
+
+            <div class="code-card">
+              <div class="code-top">
+                <strong>Response</strong>
+                <button class="copy-btn" onclick="copyText('responseBox')">Copy</button>
+              </div>
+              <pre id="responseBox">Waiting for response...</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="stack">
+        <div class="mini-card">
+          <h3>Available Endpoint</h3>
+          <p>Primary endpoint for resolving Cloudflare Turnstile through the external service.</p>
+
+          <div class="api-list">
+            <div class="api-item">
+              <span class="method">GET</span>
+              <span class="path">/turnstile-solver</span>
+            </div>
+            <div class="api-item">
+              <span class="method">POST</span>
+              <span class="path">/turnstile-solver</span>
+            </div>
+            <div class="api-item">
+              <span class="method">PUT</span>
+              <span class="path">/turnstile-solver</span>
+            </div>
+          </div>
         </div>
 
-        <div class="card">
-          <h2>🧪 Ejemplo POST</h2>
-          <div class="code">{
-  "url": "https://ejemplo.com",
+        <div class="mini-card">
+          <h3>GET Example</h3>
+          <div class="code-card" style="margin-top:14px;">
+            <pre>/turnstile-solver?url=https://example.com&siteKey=0x4AAAA...</pre>
+          </div>
+        </div>
+
+        <div class="mini-card">
+          <h3>POST Example</h3>
+          <div class="code-card" style="margin-top:14px;">
+            <pre>{
+  "url": "https://example.com",
   "siteKey": "0x4AAAA..."
-}</div>
+}</pre>
+          </div>
         </div>
 
-        <div class="card">
-          <h2>📌 Respuesta esperada</h2>
-          <div class="code">{
+        <div class="mini-card">
+          <h3>Expected Response</h3>
+          <div class="code-card" style="margin-top:14px;">
+            <pre>{
   "success": true,
+  "method": "POST",
+  "endpoint": "/turnstile-solver",
+  "request": {
+    "url": "https://example.com",
+    "siteKey": "0x4AAAA..."
+  },
   "data": {
     "token": "..."
   }
-}</div>
+}</pre>
+          </div>
         </div>
-      </div>
+      </aside>
     </div>
 
     <div class="footer">
-      Hecho para probar y documentar tu API de forma elegante.
+      <div>Turnstile Solver API Interface</div>
+      <div class="muted">Dark Professional Playground</div>
     </div>
   </div>
 
   <script>
+    function scrollToPlayground() {
+      document.getElementById("playground").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     function fillDemo() {
       document.getElementById("url").value = "https://example.com";
       document.getElementById("siteKey").value = "0x4AAAA-demo-sitekey";
       document.getElementById("method").value = "POST";
+
+      document.getElementById("requestBox").textContent = JSON.stringify({
+        method: "POST",
+        endpoint: "/turnstile-solver",
+        body: {
+          url: "https://example.com",
+          siteKey: "0x4AAAA-demo-sitekey"
+        }
+      }, null, 2);
+
+      document.getElementById("responseBox").textContent = "Ready to send request...";
     }
 
     function clearAll() {
       document.getElementById("url").value = "";
       document.getElementById("siteKey").value = "";
-      document.getElementById("requestBox").textContent = "Esperando solicitud...";
-      document.getElementById("responseBox").textContent = "Esperando respuesta...";
+      document.getElementById("requestBox").textContent = "Waiting for request...";
+      document.getElementById("responseBox").textContent = "Waiting for response...";
+    }
+
+    function copyText(id) {
+      const el = document.getElementById(id);
+      navigator.clipboard.writeText(el.textContent || "");
     }
 
     async function sendRequest() {
@@ -439,13 +715,16 @@ app.get("/", (req, res) => {
       if (!url || !siteKey) {
         responseBox.textContent = JSON.stringify({
           success: false,
-          error: "Debes completar URL y Site Key"
+          error: "Both 'url' and 'siteKey' are required."
         }, null, 2);
         return;
       }
 
       let endpoint = "/turnstile-solver";
-      let fetchOptions = { method, headers: { "Content-Type": "application/json" } };
+      let fetchOptions = {
+        method,
+        headers: { "Content-Type": "application/json" }
+      };
 
       if (method === "GET") {
         endpoint += \`?url=\${encodeURIComponent(url)}&siteKey=\${encodeURIComponent(siteKey)}\`;
@@ -459,7 +738,7 @@ app.get("/", (req, res) => {
         ...(fetchOptions.body ? { body: JSON.parse(fetchOptions.body) } : {})
       }, null, 2);
 
-      responseBox.textContent = "Cargando...";
+      responseBox.textContent = "Sending request...";
 
       try {
         const res = await fetch(endpoint, fetchOptions);
@@ -480,8 +759,7 @@ app.get("/", (req, res) => {
     }
   </script>
 </body>
-</html>
-  `);
+</html>`);
 });
 
 /* =========================
@@ -493,7 +771,7 @@ app.all("/turnstile-solver", async (req, res) => {
   if (!allowedMethods.includes(req.method)) {
     return res.status(405).json({
       success: false,
-      error: "🚩 Método no permitido",
+      error: "Method not allowed",
       allowed: allowedMethods,
     });
   }
@@ -504,7 +782,7 @@ app.all("/turnstile-solver", async (req, res) => {
   if (!url || !siteKey) {
     return res.status(400).json({
       success: false,
-      error: "Faltan parámetros: url y siteKey",
+      error: "Missing required parameters: url and siteKey",
       example: {
         GET: "/turnstile-solver?url=https://example.com&siteKey=0x4AAAA...",
         POST: {
@@ -529,7 +807,7 @@ app.all("/turnstile-solver", async (req, res) => {
     } else {
       return res.status(500).json({
         success: false,
-        message: "No se pudo obtener una respuesta válida del servicio externo",
+        message: "Could not retrieve a valid response from the external service",
       });
     }
   } catch (error) {
@@ -537,7 +815,7 @@ app.all("/turnstile-solver", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      error: error.message || "Error interno del servidor",
+      error: error.message || "Internal server error",
     });
   }
 });
@@ -566,7 +844,7 @@ app.get("/api", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost: ${PORT}`);
-  console.log(`🌐 Playground: http://localhost:${PORT}`);
-  console.log(`📡 Endpoint: http://localhost: ${PORT}/turnstile-solver`);
+  console.log(`Server running on http://localhost: ${PORT}`);
+  console.log(`Playground: http://localhost:${PORT}`);
+  console.log(`Endpoint: http://localhost:${PORT}/turnstile-solver`);
 });
