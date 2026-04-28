@@ -1,43 +1,38 @@
 const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
-const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const http = require("http");
+const https = require("https");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Agentes con keep-alive para reutilizar conexiones y máxima velocidad
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
 
 const BASE_URL_BYPASS = "https://shannz.zone.id";
 
 async function callBypassAPI(endpoint, data = {}) {
   const url = `${BASE_URL_BYPASS}/api/${endpoint.trim()}`;
-
   try {
     const response = await fetch(url, {
       method: endpoint === "stats" ? "GET" : "POST",
       headers: { "Content-Type": "application/json" },
       body: endpoint === "stats" ? null : JSON.stringify(data),
     });
-
     const text = await response.text();
-
     try {
       const json = JSON.parse(text);
       return json.success ? json.data : json;
     } catch {
-      return {
-        success: false,
-        raw: text,
-      };
+      return { success: false, raw: text };
     }
   } catch (e) {
-    console.error("Error en callBypassAPI:", e.message);
-    return {
-      success: false,
-      error: e.message,
-    };
+    return { success: false, error: e.message };
   }
 }
 
@@ -46,10 +41,6 @@ const shannz = {
     callBypassAPI("solve-turnstile-min", { url, siteKey }),
 };
 
-/* =========================
-   API ENDPOINT TURNSTILE
-========================= */
-
 app.all('/turnstile-solver', async (req, res) => {
     const allowedMethods = ['GET', 'POST', 'PUT'];
     if (!allowedMethods.includes(req.method)) {
@@ -57,10 +48,8 @@ app.all('/turnstile-solver', async (req, res) => {
     }
     const url = req.query.url || req.body.url;
     const siteKey = req.query.siteKey || req.body.siteKey;
-
     try {
         const result = await shannz.turnstileMin(url, siteKey);
-        
         if (result) {
             return res.json({ success: true, data: result });
         } else {
@@ -71,56 +60,18 @@ app.all('/turnstile-solver', async (req, res) => {
     }
 });
 
-/* =========================
-   FFMPEG ULTRARAPIDO
-========================= */
-
-/**
- * Usa FFmpeg directamente desde la URL m3u8 remota.
- * No descarga segmentos manualmente — FFmpeg los descarga en paralelo internamente.
- * Resultado: ensamblado instantáneo y ultrarrápido.
- */
-const runFFmpeg = (m3u8Url, output, headers = {}) =>
-  new Promise((resolve, reject) => {
-    const headerArgs = [];
-    for (const [key, val] of Object.entries(headers)) {
-      headerArgs.push("-headers", `${key}: ${val}\r\n`);
-    }
-
-    const proc = spawn("ffmpeg", [
-      "-y",
-      ...headerArgs,
-      "-i", m3u8Url,
-      "-c", "copy",
-      "-bsf:a", "aac_adtstoasc",
-      "-movflags", "+faststart",
-      "-threads", "0",
-      output,
-    ]);
-
-    proc.stderr.on("data", (data) => {
-      // descomenta para debug: console.error("[ffmpeg]", data.toString());
-    });
-
-    proc.on("close", (code) =>
-      code === 0 ? resolve(output) : reject(new Error(`FFmpeg salió con código ${code}`))
-    );
-
-    proc.on("error", reject);
-  });
-
 class HentaiLaDownloader {
   constructor(options = {}) {
     this.BASE = "https://cdn.hvidserv.com";
-    this.concurrency = options.concurrency || 32; // máxima concurrencia
-    this.timeout = options.timeout || 30000;
+    // MÁXIMA CONCURRENCIA - 64 descargas simultáneas
+    this.concurrency = options.concurrency || 64;
+    this.timeout = options.timeout || 60000;
 
     this.HEADERS = {
-      "User-Agent":
-        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-      Accept: "",
+      "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+      Accept: "*/*",
       "Accept-Language": "es-419,es;q=0.9",
-      "Accept-Encoding": "identity",
+      "Accept-Encoding": "gzip, deflate, br",
       Origin: this.BASE,
       Referer: `${this.BASE}/`,
       "Sec-Fetch-Dest": "empty",
@@ -155,18 +106,19 @@ class HentaiLaDownloader {
 
   extractId(input) {
     const m = String(input).match(/([a-f0-9]{32})/i);
-    return m[1];
+    return m ? m[1] : null;
   }
 
   sanitizeFileName(name = "video") {
-    return name
-      .replace(/[\/:*?"<>|]/g, "")
-      .replace(/\s+/g, "_")
-      .trim();
+    return name.replace(/[\/:*?"<>|]/g, "").replace(/\s+/g, "_").trim();
   }
 
+  // DESCARGA ULTRA RÁPIDA con fetch y arrayBuffer
   async fetchBuf(url, headers = this.HEADERS) {
-    const res = await fetch(url, { headers });
+    const res = await fetch(url, { 
+      headers,
+      agent: url.startsWith('https:') ? httpsAgent : httpAgent
+    });
     return Buffer.from(await res.arrayBuffer());
   }
 
@@ -196,30 +148,22 @@ class HentaiLaDownloader {
 
   patchDuration(initBuf, totalSeconds) {
     const buf = Buffer.from(initBuf);
-
     const moov = this.findBox(buf, "moov");
     if (!moov) return buf;
-
     const moovEnd = moov.offset + moov.size;
-
     const mvhd = this.findBox(buf, "mvhd", moov.offset + 8, moovEnd);
+    
     if (mvhd) {
       const version = buf[mvhd.offset + 8];
       let timescale, durationOff;
-
       if (version === 1) {
-        timescale = this.read32(buf, mvhd.offset + 8 + 1 + 3 + 16);
-        durationOff = mvhd.offset + 8 + 1 + 3 + 20;
+        timescale = this.read32(buf, mvhd.offset + 28);
+        durationOff = mvhd.offset + 32;
         const durationUnits = Math.round(totalSeconds * timescale);
-        this.write64(
-          buf,
-          durationOff,
-          Math.floor(durationUnits / 0x100000000),
-          durationUnits >>> 0
-        );
+        this.write64(buf, durationOff, Math.floor(durationUnits / 0x100000000), durationUnits >>> 0);
       } else {
-        timescale = this.read32(buf, mvhd.offset + 8 + 1 + 3 + 8);
-        durationOff = mvhd.offset + 8 + 1 + 3 + 12;
+        timescale = this.read32(buf, mvhd.offset + 20);
+        durationOff = mvhd.offset + 24;
         const durationUnits = Math.round(totalSeconds * timescale);
         this.write32(buf, durationOff, durationUnits);
       }
@@ -229,78 +173,51 @@ class HentaiLaDownloader {
     while (search < moovEnd) {
       const trak = this.findBox(buf, "trak", search, moovEnd);
       if (!trak) break;
-
       const trakEnd = trak.offset + trak.size;
       const tkhd = this.findBox(buf, "tkhd", trak.offset + 8, trakEnd);
-
       if (tkhd) {
         const version = buf[tkhd.offset + 8];
-
         const mdia = this.findBox(buf, "mdia", trak.offset + 8, trakEnd);
         if (mdia) {
-          const mdhd = this.findBox(
-            buf,
-            "mdhd",
-            mdia.offset + 8,
-            mdia.offset + mdia.size
-          );
-
+          const mdhd = this.findBox(buf, "mdhd", mdia.offset + 8, mdia.offset + mdia.size);
           if (mdhd) {
             const mdhdV = buf[mdhd.offset + 8];
             let timescale = 1;
-
             if (mdhdV === 1) {
-              timescale = this.read32(buf, mdhd.offset + 8 + 1 + 3 + 16);
+              timescale = this.read32(buf, mdhd.offset + 28);
             } else {
-              timescale = this.read32(buf, mdhd.offset + 8 + 1 + 3 + 8);
+              timescale = this.read32(buf, mdhd.offset + 20);
             }
-
             const mdhdDurUnits = Math.round(totalSeconds * timescale);
-
             if (mdhdV === 1) {
-              this.write64(
-                buf,
-                mdhd.offset + 8 + 1 + 3 + 20,
-                Math.floor(mdhdDurUnits / 0x100000000),
-                mdhdDurUnits >>> 0
-              );
+              this.write64(buf, mdhd.offset + 32, Math.floor(mdhdDurUnits / 0x100000000), mdhdDurUnits >>> 0);
             } else {
-              this.write32(buf, mdhd.offset + 8 + 1 + 3 + 12, mdhdDurUnits);
+              this.write32(buf, mdhd.offset + 24, mdhdDurUnits);
             }
           }
         }
-
         if (mvhd) {
           const mvhdV = buf[mvhd.offset + 8];
-          let movieTS =
-            mvhdV === 1
-              ? this.read32(buf, mvhd.offset + 28)
-              : this.read32(buf, mvhd.offset + 20);
-
+          let movieTS = mvhdV === 1 ? this.read32(buf, mvhd.offset + 28) : this.read32(buf, mvhd.offset + 20);
           const units = Math.round(totalSeconds * movieTS);
-
           if (version === 1) {
-            this.write64(
-              buf,
-              tkhd.offset + 8 + 1 + 3 + 24,
-              Math.floor(units / 0x100000000),
-              units >>> 0
-            );
+            this.write64(buf, tkhd.offset + 32, Math.floor(units / 0x100000000), units >>> 0);
           } else {
-            this.write32(buf, tkhd.offset + 8 + 1 + 3 + 16, units);
+            this.write32(buf, tkhd.offset + 24, units);
           }
         }
       }
-
       search = trak.offset + trak.size;
     }
-
     return buf;
   }
 
   async getPlaylist(videoId) {
     const url = `${this.BASE}/m3u8/${videoId}`;
-    const res = await fetch(url, { headers: this.HEADERS });
+    const res = await fetch(url, { 
+      headers: this.HEADERS,
+      agent: httpsAgent 
+    });
     const text = await res.text();
 
     let initUrl = null;
@@ -309,7 +226,6 @@ class HentaiLaDownloader {
 
     for (const raw of text.split("\n")) {
       const line = raw.trim();
-
       if (line.startsWith("#EXT-X-MAP:URI=")) {
         initUrl = line.match(/URI="([^"]+)"/)?.[1] || null;
       } else if (line.startsWith("#EXTINF:")) {
@@ -324,19 +240,29 @@ class HentaiLaDownloader {
     return { initUrl, segments, totalSeconds };
   }
 
+  // DESCARGA MASIVAMENTE PARALELA - SIN LÍMITES DE CONCURRENCIA MANUALES
   async downloadAll(urls, concurrency = this.concurrency) {
+    // Dividimos en chunks pero con Promise.all para máxima velocidad
     const results = new Array(urls.length);
-    let idx = 0;
-
-    async function worker(ctx) {
-      while (idx < urls.length) {
-        const i = idx++;
-        results[i] = await ctx.fetchBuf(urls[i].url || urls[i]);
+    
+    async function worker(ctx, start, end) {
+      const promises = [];
+      for (let i = start; i < end && i < urls.length; i++) {
+        promises.push(
+          ctx.fetchBuf(urls[i].url || urls[i]).then(buf => {
+            results[i] = buf;
+          })
+        );
       }
+      await Promise.all(promises);
     }
 
-    const workers = Array.from({ length: concurrency }, () => worker(this));
-    await Promise.all(workers);
+    // Procesamos en batches para no saturar memoria pero con máxima paralelización
+    const batchSize = concurrency;
+    for (let i = 0; i < urls.length; i += batchSize) {
+      await worker(this, i, i + batchSize);
+    }
+    
     return results;
   }
 
@@ -357,6 +283,8 @@ class HentaiLaDownloader {
           Referer: cleanUrl,
         },
         timeout: this.timeout,
+        httpAgent,
+        httpsAgent,
       });
 
       const dataNode = json?.nodes?.find((v) => v?.type === "data");
@@ -383,39 +311,13 @@ class HentaiLaDownloader {
         try { return resolve(v); } catch { return v; }
       });
 
-      const episodeObj =
-        resolved.find(
-          (v) =>
-            v &&
-            typeof v === "object" &&
-            (v.id || v.episodeNumber || v.publishedAt || v.filler !== undefined)
-        ) || {};
-
-      const embedsObj =
-        resolved.find(
-          (v) =>
-            v &&
-            typeof v === "object" &&
-            (Array.isArray(v.SUB) || Array.isArray(v.DUB) || Array.isArray(v.RAW))
-        ) || {};
-
-      const downloadsObj =
-        resolved.find(
-          (v) =>
-            v &&
-            typeof v === "object" &&
-            (Array.isArray(v.SUB) || Array.isArray(v.DUB) || Array.isArray(v.RAW)) &&
-            JSON.stringify(v).includes("server")
-        ) || {};
+      const episodeObj = resolved.find((v) => v && typeof v === "object" && (v.id || v.episodeNumber || v.publishedAt || v.filler !== undefined)) || {};
+      const embedsObj = resolved.find((v) => v && typeof v === "object" && (Array.isArray(v.SUB) || Array.isArray(v.DUB) || Array.isArray(v.RAW))) || {};
+      const downloadsObj = resolved.find((v) => v && typeof v === "object" && (Array.isArray(v.SUB) || Array.isArray(v.DUB) || Array.isArray(v.RAW)) && JSON.stringify(v).includes("server")) || {};
 
       const getHvidData = (playUrl) => {
         const id = playUrl?.match(/\/play\/([a-f0-9]+)/i)?.[1] || null;
-        return {
-          id,
-          play: playUrl || null,
-          m3u8: id ? `https://cdn.hvidserv.com/m3u8/${id}` : null,
-          embed: id ? `https://hvidserv.com/embed/${id}` : null,
-        };
+        return { id, play: playUrl || null, m3u8: id ? `https://cdn.hvidserv.com/m3u8/${id}` : null, embed: id ? `https://hvidserv.com/embed/${id}` : null };
       };
 
       const dedupeByUrl = (items = []) => {
@@ -430,38 +332,16 @@ class HentaiLaDownloader {
 
       const normalizeMirrors = (mirrorRefs) => {
         if (!Array.isArray(mirrorRefs)) return [];
-        return dedupeByUrl(
-          mirrorRefs
-            .map((m) => resolve(m))
-            .filter((v) => v && typeof v === "object" && v.server && v.url)
-            .map((v) => ({ server: v.server || null, ...getHvidData(v.url) }))
-        );
+        return dedupeByUrl(mirrorRefs.map((m) => resolve(m)).filter((v) => v && typeof v === "object" && v.server && v.url).map((v) => ({ server: v.server || null, ...getHvidData(v.url) })));
       };
 
       const normalizeDownloads = (downloadRefs) => {
         if (!Array.isArray(downloadRefs)) return [];
-        return dedupeByUrl(
-          downloadRefs
-            .map((d) => resolve(d))
-            .filter((v) => v && typeof v === "object" && v.server && v.url)
-            .map((v) => ({ server: v.server || null, url: v.url || null }))
-        );
+        return dedupeByUrl(downloadRefs.map((d) => resolve(d)).filter((v) => v && typeof v === "object" && v.server && v.url).map((v) => ({ server: v.server || null, url: v.url || null })));
       };
 
-      const mirrors = {
-        SUB: normalizeMirrors(embedsObj.SUB || []),
-        DUB: normalizeMirrors(embedsObj.DUB || []),
-        RAW: normalizeMirrors(embedsObj.RAW || []),
-      };
-
-      const downloads = {
-        SUB: normalizeDownloads(downloadsObj.SUB || []),
-        DUB: normalizeDownloads(downloadsObj.DUB || []),
-        RAW: normalizeDownloads(downloadsObj.RAW || []),
-      };
-
-      const allMirrorLinks = [...mirrors.SUB, ...mirrors.DUB, ...mirrors.RAW];
-      const allDownloadLinks = [...downloads.SUB, ...downloads.DUB, ...downloads.RAW];
+      const mirrors = { SUB: normalizeMirrors(embedsObj.SUB || []), DUB: normalizeMirrors(embedsObj.DUB || []), RAW: normalizeMirrors(embedsObj.RAW || []) };
+      const downloads = { SUB: normalizeDownloads(downloadsObj.SUB || []), DUB: normalizeDownloads(downloadsObj.DUB || []), RAW: normalizeDownloads(downloadsObj.RAW || []) };
 
       return {
         success: true,
@@ -472,13 +352,13 @@ class HentaiLaDownloader {
         published: this.formatDate(episodeObj.publishedAt),
         links: {
           main: {
-            id: allMirrorLinks[0]?.id || null,
-            play: allMirrorLinks[0]?.play || null,
-            m3u8: allMirrorLinks[0]?.m3u8 || null,
-            embed: allMirrorLinks[0]?.embed || null,
+            id: mirrors.SUB[0]?.id || mirrors.DUB[0]?.id || mirrors.RAW[0]?.id || null,
+            play: mirrors.SUB[0]?.play || mirrors.DUB[0]?.play || mirrors.RAW[0]?.play || null,
+            m3u8: mirrors.SUB[0]?.m3u8 || mirrors.DUB[0]?.m3u8 || mirrors.RAW[0]?.m3u8 || null,
+            embed: mirrors.SUB[0]?.embed || mirrors.DUB[0]?.embed || mirrors.RAW[0]?.embed || null,
           },
           mirrors,
-          downloads: allDownloadLinks,
+          downloads: [...downloads.SUB, ...downloads.DUB, ...downloads.RAW],
         },
       };
     } catch (e) {
@@ -486,23 +366,29 @@ class HentaiLaDownloader {
     }
   }
 
+  // ENSAMBLAJE ULTRA RÁPIDO CON STREAMS
   async downloadFromPlayUrl(playUrl, outputFile) {
     const videoId = this.extractId(playUrl);
+    if (!videoId) throw new Error("ID de video no válido");
+    
     const { initUrl, segments, totalSeconds } = await this.getPlaylist(videoId);
-    let initBuf = await this.fetchBuf(initUrl);
-    initBuf = this.patchDuration(initBuf, totalSeconds);
+    
+    // Descargar init y segments en paralelo máximo
+    const [initBuf, ...segBuffers] = await Promise.all([
+      this.fetchBuf(initUrl),
+      ...segments.map(seg => this.fetchBuf(seg.url))
+    ]);
 
-    const segBuffers = await this.downloadAll(segments);
-
+    const patchedInit = this.patchDuration(initBuf, totalSeconds);
     const out = outputFile || `${videoId}.mp4`;
 
+    // ESCRITURA DIRECTA SIN DELAYS
     const ws = fs.createWriteStream(out);
-    const writeChunk = (b) =>
-      new Promise((res, rej) => ws.write(b, (e) => (e ? rej(e) : res())));
-
-    await writeChunk(initBuf);
-    for (const buf of segBuffers) await writeChunk(buf);
-
+    const chunks = [patchedInit, ...segBuffers];
+    for (const chunk of chunks) {
+      ws.write(chunk);
+    }
+    
     await new Promise((res, rej) => {
       ws.end();
       ws.on("finish", res);
@@ -510,7 +396,6 @@ class HentaiLaDownloader {
     });
 
     const stats = fs.statSync(out);
-
     return {
       success: true,
       id: videoId,
@@ -523,39 +408,20 @@ class HentaiLaDownloader {
   async download(pageUrl, outputFile = null) {
     const info = await this.scrape(pageUrl);
     const playUrl = info?.links?.main?.play;
-    const finalName =
-      outputFile ||
-      `${this.sanitizeFileName(info.title || "video")}_ep${info.episode || "1"}.mp4`;
-
+    const finalName = outputFile || `${this.sanitizeFileName(info.title || "video")}_ep${info.episode || "1"}.mp4`;
     const downloaded = await this.downloadFromPlayUrl(playUrl, finalName);
-
-    return {
-      success: true,
-      info,
-      download: downloaded,
-    };
+    return { success: true, info, download: downloaded };
   }
 }
-
-/* =========================
-   HENTAIDL ULTRA-RAPIDO
-   Estrategia:
-   1. Scrape info (instantáneo, ~1s)
-   2. Lanzar FFmpeg directamente sobre el m3u8 remoto (sin descargar segmentos manualmente)
-   3. Responder con la URL apenas FFmpeg termine — FFmpeg descarga todo en paralelo internamente
-========================= */
 
 const VIDEOS_DIR = path.join(process.cwd(), "videos");
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true });
 app.use("/videos", express.static(VIDEOS_DIR));
 
-// Cache en memoria para evitar redescargar el mismo episodio
-const downloadCache = new Map();
-
 app.all("/starlight/hentaidl", async (req, res) => {
   const url = req.query.url || req.body?.url;
-  const downloader = new HentaiLaDownloader();
-
+  const downloader = new HentaiLaDownloader({ concurrency: 64 }); // 64 workers
+  
   if (!url) {
     return res.status(400).json({
       success: false,
@@ -564,113 +430,63 @@ app.all("/starlight/hentaidl", async (req, res) => {
     });
   }
 
-  // Si ya está en caché, responder al instante
-  if (downloadCache.has(url)) {
-    const cached = downloadCache.get(url);
-    console.log(`[cache] HIT → ${cached.video.url}`);
-    return res.json({ success: true, cached: true, ...cached });
-  }
-
   try {
-    // PASO 1: Scrape ultrarrápido (~1s)
-    const t0 = Date.now();
     const info = await downloader.scrape(url);
-
     if (!info.success) {
       return res.status(502).json({ success: false, error: "No se pudo obtener info del episodio." });
     }
 
-    const m3u8Url = info.links?.main?.m3u8;
-    if (!m3u8Url) {
-      return res.status(502).json({ success: false, error: "No se encontró m3u8." });
+    const playUrl = info.links?.main?.play;
+    if (!playUrl) {
+      return res.status(502).json({ success: false, error: "No se encontró URL de reproducción." });
     }
 
     const safeName = downloader.sanitizeFileName(info.title || "video");
     const ep = info.episode || "1";
     const fileName = `${safeName}_ep${ep}_${Date.now()}.mp4`;
     const filePath = path.join(VIDEOS_DIR, fileName);
-    const publicUrl = `https://apis-starlights-team.koyeb.app/videos/${fileName}`;
 
-    console.log(`[scrape] OK en ${Date.now() - t0}ms → ${m3u8Url}`);
-    console.log(`[ffmpeg] Iniciando ensamblado → ${filePath}`);
+    console.log(`[DOWNLOAD] Iniciando descarga ultra-rápida → ${filePath}`);
+    const startTime = Date.now();
+    
+    const result = await downloader.downloadFromPlayUrl(playUrl, filePath);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    // PASO 2: FFmpeg descarga y ensambla el m3u8 directamente (máxima velocidad)
-    // FFmpeg maneja internamente la descarga paralela de segmentos
-    const t1 = Date.now();
-
-    await runFFmpeg(m3u8Url, filePath, {
-      "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-      "Origin": "https://cdn.hvidserv.com",
-      "Referer": "https://cdn.hvidserv.com/",
-    });
-
-    console.log(`[ffmpeg] Ensamblado en ${Date.now() - t1}ms`);
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(500).json({ success: false, error: "FFmpeg no generó el archivo." });
+    if (!result.success || !fs.existsSync(filePath)) {
+      return res.status(500).json({ success: false, error: "Error al ensamblar el video." });
     }
-
+    
     const stat = fs.statSync(filePath);
     const sizeMB = +(stat.size / 1024 / 1024).toFixed(2);
-
-    const responsePayload = {
+    
+    return res.json({
+      success: true,
       title: info.title,
       episode: info.episode,
       filler: info.filler,
       published: info.published,
+      speed: `${elapsed}s`,
       video: {
-        url: publicUrl,
+        url: `${req.protocol}://${req.get('host')}/videos/${fileName}`,
         fileName,
         size: `${sizeMB} MB`,
-        m3u8: m3u8Url,
+        segments: result.segments,
       },
-    };
-
-    // Guardar en caché para peticiones futuras (respuesta instantánea)
-    downloadCache.set(url, responsePayload);
-
-    // Limpiar archivos viejos en background (>2h) para no llenar el disco
-    cleanOldVideos(VIDEOS_DIR, 2 * 60 * 60 * 1000);
-
-    return res.json({ success: true, cached: false, ...responsePayload });
+    });
 
   } catch (err) {
-    console.error("[error]", err.message);
+    console.error("[ERROR]", err.message);
     if (!res.headersSent) {
-      return res.status(500).json({ success: false, error: err.message });
+      res.status(500).json({ success: false, error: err.message });
     }
   }
 });
 
-/**
- * Limpia videos más viejos que maxAgeMs del directorio dado.
- * Se ejecuta en background, sin bloquear la respuesta.
- */
-function cleanOldVideos(dir, maxAgeMs) {
-  try {
-    const now = Date.now();
-    const files = fs.readdirSync(dir);
-    for (const file of files) {
-      const fp = path.join(dir, file);
-      const stat = fs.statSync(fp);
-      if (now - stat.mtimeMs > maxAgeMs) {
-        fs.unlinkSync(fp);
-        console.log(`[clean] Eliminado: ${file}`);
-      }
-    }
-  } catch (e) {
-    // silencioso
-  }
-}
-
-/* =========================
-   INFO GENERAL API
-========================= */
 app.get("/api", (req, res) => {
   res.json({
     success: true,
-    name: "Turnstile Solver API",
-    version: "1.0.0",
+    name: "Turnstile Solver API - ULTRA FAST",
+    version: "2.0.0",
     endpoints: {
       playground: "/",
       solver: "/turnstile-solver",
@@ -679,17 +495,14 @@ app.get("/api", (req, res) => {
     methods: ["GET", "POST", "PUT"],
     examples: {
       get: "/turnstile-solver?url=https://example.com&siteKey=0x4AAAA...",
-      post: {
-        url: "https://example.com",
-        siteKey: "0x4AAAA...",
-      },
+      post: { url: "https://example.com", siteKey: "0x4AAAA..." },
     },
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Playground: http://localhost:${PORT}`);
-  console.log(`Endpoint: http://localhost:${PORT}/turnstile-solver`);
-  console.log(`HentaiDL:  http://localhost:${PORT}/starlight/hentaidl`);
+  console.log(`🚀 Server ULTRA FAST running on http://localhost:${PORT}`);
+  console.log(`⚡ Playground: http://localhost:${PORT}`);
+  console.log(`🔓 Solver: http://localhost:${PORT}/turnstile-solver`);
+  console.log(`📥 HentaiDL: http://localhost:${PORT}/starlight/hentaidl`);
 });
