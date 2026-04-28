@@ -1,6 +1,10 @@
 const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
+const { spawn } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const axios = require("axios");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -42,730 +46,6 @@ const shannz = {
     callBypassAPI("solve-turnstile-min", { url, siteKey }),
 };
 
-/* =========================
-   UI PRINCIPAL PROFESIONAL
-========================= */
-app.get("/", (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Turnstile Solver API</title>
-  <meta name="description" content="Professional API Playground for Turnstile Solver" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #050505;
-      --bg-soft: rgba(255, 255, 255, 0.035);
-      --bg-soft-2: rgba(255, 255, 255, 0.055);
-      --stroke: rgba(255, 255, 255, 0.09);
-      --stroke-2: rgba(255, 255, 255, 0.14);
-      --text: #ffffff;
-      --muted: rgba(255, 255, 255, 0.68);
-      --muted-2: rgba(255, 255, 255, 0.45);
-      --accent: #ffffff;
-      --shadow: 0 20px 80px rgba(0, 0, 0, 0.45);
-      --radius: 24px;
-      --radius-sm: 18px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      margin: 0;
-      font-family: "Inter", sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(255,255,255,0.05), transparent 28%),
-        radial-gradient(circle at top right, rgba(255,255,255,0.03), transparent 25%),
-        radial-gradient(circle at bottom, rgba(255,255,255,0.02), transparent 30%),
-        linear-gradient(180deg, #030303 0%, #080808 45%, #050505 100%);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    .noise {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      opacity: 0.04;
-      background-image:
-        radial-gradient(circle at 20% 20%, white 0.6px, transparent 0.8px),
-        radial-gradient(circle at 80% 40%, white 0.6px, transparent 0.8px),
-        radial-gradient(circle at 60% 80%, white 0.6px, transparent 0.8px);
-      background-size: 180px 180px;
-      z-index: 0;
-    }
-
-    .container {
-      position: relative;
-      z-index: 1;
-      max-width: 1320px;
-      margin: 0 auto;
-      padding: 42px 18px 60px;
-    }
-
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 28px;
-      padding: 18px 22px;
-      border: 1px solid var(--stroke);
-      background: rgba(255,255,255,0.03);
-      backdrop-filter: blur(16px);
-      border-radius: 22px;
-      box-shadow: var(--shadow);
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .brand-mark {
-      width: 42px;
-      height: 42px;
-      border-radius: 14px;
-      background:
-        linear-gradient(145deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04));
-      border: 1px solid rgba(255,255,255,0.12);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      color: white;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-    }
-
-    .brand h1 {
-      margin: 0;
-      font-size: 17px;
-      letter-spacing: -0.03em;
-      font-weight: 700;
-    }
-
-    .brand p {
-      margin: 2px 0 0;
-      color: var(--muted-2);
-      font-size: 13px;
-    }
-
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 13px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .status-dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 999px;
-      background: #ffffff;
-      box-shadow: 0 0 14px rgba(255,255,255,0.7);
-    }
-
-    .hero {
-      margin-bottom: 26px;
-      padding: 34px 30px;
-      border-radius: 30px;
-      border: 1px solid var(--stroke);
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-      backdrop-filter: blur(18px);
-      box-shadow: var(--shadow);
-    }
-
-    .hero-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04);
-      color: var(--muted);
-      border-radius: 999px;
-      padding: 10px 14px;
-      font-size: 13px;
-      margin-bottom: 18px;
-    }
-
-    .hero h2 {
-      margin: 0;
-      font-size: clamp(34px, 6vw, 62px);
-      line-height: 0.98;
-      letter-spacing: -0.05em;
-      font-weight: 800;
-      max-width: 880px;
-    }
-
-    .hero p {
-      margin-top: 18px;
-      font-size: 16px;
-      line-height: 1.8;
-      color: var(--muted);
-      max-width: 820px;
-    }
-
-    .hero-actions {
-      margin-top: 24px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .button {
-      appearance: none;
-      border: none;
-      outline: none;
-      cursor: pointer;
-      padding: 14px 18px;
-      border-radius: 16px;
-      font-size: 14px;
-      font-weight: 700;
-      transition: transform .18s ease, opacity .18s ease, background .18s ease, border-color .18s ease;
-    }
-
-    .button:hover {
-      transform: translateY(-1px);
-    }
-
-    .button-primary {
-      background: #ffffff;
-      color: #000000;
-      box-shadow: 0 10px 40px rgba(255,255,255,0.08);
-    }
-
-    .button-secondary {
-      background: rgba(255,255,255,0.045);
-      color: #ffffff;
-      border: 1px solid rgba(255,255,255,0.09);
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: 1.3fr 0.7fr;
-      gap: 22px;
-      align-items: start;
-    }
-
-    .panel {
-      border-radius: var(--radius);
-      border: 1px solid var(--stroke);
-      background: rgba(255,255,255,0.03);
-      backdrop-filter: blur(16px);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .panel-header {
-      padding: 24px 24px 0;
-    }
-
-    .panel-title {
-      margin: 0;
-      font-size: 22px;
-      letter-spacing: -0.03em;
-      font-weight: 750;
-    }
-
-    .panel-subtitle {
-      margin-top: 8px;
-      color: var(--muted);
-      line-height: 1.7;
-      font-size: 14px;
-    }
-
-    .panel-body {
-      padding: 24px;
-    }
-
-    .form-grid {
-      display: grid;
-      gap: 16px;
-    }
-
-    .field {
-      display: grid;
-      gap: 10px;
-    }
-
-    .field label {
-      font-size: 13px;
-      font-weight: 600;
-      color: rgba(255,255,255,0.85);
-      letter-spacing: 0.01em;
-    }
-
-    input, select, textarea {
-      width: 100%;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04);
-      color: #ffffff;
-      border-radius: 16px;
-      padding: 15px 16px;
-      font-size: 14px;
-      font-family: inherit;
-      outline: none;
-      transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
-    }
-
-    input::placeholder,
-    textarea::placeholder {
-      color: rgba(255,255,255,0.35);
-    }
-
-    input:focus,
-    select:focus,
-    textarea:focus {
-      border-color: rgba(255,255,255,0.22);
-      background: rgba(255,255,255,0.055);
-      box-shadow: 0 0 0 4px rgba(255,255,255,0.035);
-    }
-
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 8px;
-    }
-
-    .code-wrap {
-      margin-top: 18px;
-      display: grid;
-      gap: 18px;
-    }
-
-    .code-card {
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(0,0,0,0.28);
-      border-radius: 20px;
-      overflow: hidden;
-    }
-
-    .code-top {
-      padding: 14px 16px;
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(255,255,255,0.02);
-    }
-
-    .code-top strong {
-      font-size: 13px;
-      letter-spacing: 0.02em;
-      color: rgba(255,255,255,0.88);
-    }
-
-    .copy-btn {
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04);
-      color: white;
-      border-radius: 12px;
-      padding: 8px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    pre {
-      margin: 0;
-      padding: 18px;
-      overflow: auto;
-      color: rgba(255,255,255,0.92);
-      font-family: var(--mono);
-      font-size: 13px;
-      line-height: 1.75;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .stack {
-      display: grid;
-      gap: 22px;
-    }
-
-    .mini-card {
-      padding: 22px;
-      border-radius: 24px;
-      border: 1px solid var(--stroke);
-      background: rgba(255,255,255,0.03);
-      backdrop-filter: blur(16px);
-      box-shadow: var(--shadow);
-    }
-
-    .mini-card h3 {
-      margin: 0 0 14px;
-      font-size: 18px;
-      letter-spacing: -0.03em;
-    }
-
-    .mini-card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.8;
-      font-size: 14px;
-    }
-
-    .api-list {
-      display: grid;
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .api-item {
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.03);
-      border-radius: 18px;
-      padding: 14px 15px;
-    }
-
-    .method {
-      display: inline-flex;
-      min-width: 58px;
-      justify-content: center;
-      padding: 7px 10px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.05);
-      margin-right: 10px;
-    }
-
-    .path {
-      font-family: var(--mono);
-      font-size: 13px;
-      color: rgba(255,255,255,0.95);
-    }
-
-    .footer {
-      margin-top: 28px;
-      padding: 18px 20px;
-      border: 1px solid var(--stroke);
-      background: rgba(255,255,255,0.03);
-      border-radius: 20px;
-      color: var(--muted-2);
-      font-size: 13px;
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .muted {
-      color: var(--muted-2);
-    }
-
-    .response-success {
-      color: #ffffff;
-    }
-
-    .response-error {
-      color: #ffb4b4;
-    }
-
-    @media (max-width: 1024px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 680px) {
-      .container {
-        padding: 18px 14px 40px;
-      }
-
-      .topbar {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .hero {
-        padding: 24px 20px;
-      }
-
-      .panel-body,
-      .panel-header,
-      .mini-card {
-        padding-left: 18px;
-        padding-right: 18px;
-      }
-
-      .hero h2 {
-        font-size: 34px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="noise"></div>
-
-  <div class="container">
-    <div class="topbar">
-      <div class="brand">
-        <div class="brand-mark">TS</div>
-        <div>
-          <h1>Turnstile Solver API</h1>
-          <p>Production-style interface for testing and documentation</p>
-        </div>
-      </div>
-      <div class="status">
-        <span class="status-dot"></span>
-        Service Available
-      </div>
-    </div>
-
-    <section class="hero">
-      <div class="hero-label">API Playground</div>
-      <h2>Elegant interface for testing your Turnstile endpoint.</h2>
-      <p>
-        Send requests directly from the browser using GET, POST or PUT.
-        Inspect payloads, preview responses and document the endpoint with a clean, professional dark interface.
-      </p>
-      <div class="hero-actions">
-        <button class="button button-primary" onclick="scrollToPlayground()">Open Playground</button>
-        <button class="button button-secondary" onclick="fillDemo()">Load Example</button>
-      </div>
-    </section>
-
-    <div class="layout">
-      <section class="panel" id="playground">
-        <div class="panel-header">
-          <h3 class="panel-title">Request Playground</h3>
-          <div class="panel-subtitle">
-            Test the endpoint in real time and inspect the exact request and response.
-          </div>
-        </div>
-
-        <div class="panel-body">
-          <div class="form-grid">
-            <div class="field">
-              <label>HTTP Method</label>
-              <select id="method">
-                <option value="GET">GET</option>
-                <option value="POST" selected>POST</option>
-                <option value="PUT">PUT</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label>Target URL</label>
-              <input id="url" placeholder="https://example.com" />
-            </div>
-
-            <div class="field">
-              <label>Site Key</label>
-              <input id="siteKey" placeholder="0x4AAAA..." />
-            </div>
-
-            <div class="actions">
-              <button class="button button-primary" onclick="sendRequest()">Send Request</button>
-              <button class="button button-secondary" onclick="fillDemo()">Load Demo</button>
-              <button class="button button-secondary" onclick="clearAll()">Clear</button>
-            </div>
-          </div>
-
-          <div class="code-wrap">
-            <div class="code-card">
-              <div class="code-top">
-                <strong>Generated Request</strong>
-                <button class="copy-btn" onclick="copyText('requestBox')">Copy</button>
-              </div>
-              <pre id="requestBox">Waiting for request...</pre>
-            </div>
-
-            <div class="code-card">
-              <div class="code-top">
-                <strong>Response</strong>
-                <button class="copy-btn" onclick="copyText('responseBox')">Copy</button>
-              </div>
-              <pre id="responseBox">Waiting for response...</pre>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <aside class="stack">
-        <div class="mini-card">
-          <h3>Available Endpoint</h3>
-          <p>Primary endpoint for resolving Cloudflare Turnstile through the external service.</p>
-
-          <div class="api-list">
-            <div class="api-item">
-              <span class="method">GET</span>
-              <span class="path">/turnstile-solver</span>
-            </div>
-            <div class="api-item">
-              <span class="method">POST</span>
-              <span class="path">/turnstile-solver</span>
-            </div>
-            <div class="api-item">
-              <span class="method">PUT</span>
-              <span class="path">/turnstile-solver</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="mini-card">
-          <h3>GET Example</h3>
-          <div class="code-card" style="margin-top:14px;">
-            <pre>/turnstile-solver?url=https://example.com&siteKey=0x4AAAA...</pre>
-          </div>
-        </div>
-
-        <div class="mini-card">
-          <h3>POST Example</h3>
-          <div class="code-card" style="margin-top:14px;">
-            <pre>{
-  "url": "https://example.com",
-  "siteKey": "0x4AAAA..."
-}</pre>
-          </div>
-        </div>
-
-        <div class="mini-card">
-          <h3>Expected Response</h3>
-          <div class="code-card" style="margin-top:14px;">
-            <pre>{
-  "success": true,
-  "method": "POST",
-  "endpoint": "/turnstile-solver",
-  "request": {
-    "url": "https://example.com",
-    "siteKey": "0x4AAAA..."
-  },
-  "data": {
-    "token": "..."
-  }
-}</pre>
-          </div>
-        </div>
-      </aside>
-    </div>
-
-    <div class="footer">
-      <div>Turnstile Solver API Interface</div>
-      <div class="muted">Dark Professional Playground</div>
-    </div>
-  </div>
-
-  <script>
-    function scrollToPlayground() {
-      document.getElementById("playground").scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    function fillDemo() {
-      document.getElementById("url").value = "https://example.com";
-      document.getElementById("siteKey").value = "0x4AAAA-demo-sitekey";
-      document.getElementById("method").value = "POST";
-
-      document.getElementById("requestBox").textContent = JSON.stringify({
-        method: "POST",
-        endpoint: "/turnstile-solver",
-        body: {
-          url: "https://example.com",
-          siteKey: "0x4AAAA-demo-sitekey"
-        }
-      }, null, 2);
-
-      document.getElementById("responseBox").textContent = "Ready to send request...";
-    }
-
-    function clearAll() {
-      document.getElementById("url").value = "";
-      document.getElementById("siteKey").value = "";
-      document.getElementById("requestBox").textContent = "Waiting for request...";
-      document.getElementById("responseBox").textContent = "Waiting for response...";
-    }
-
-    function copyText(id) {
-      const el = document.getElementById(id);
-      navigator.clipboard.writeText(el.textContent || "");
-    }
-
-    async function sendRequest() {
-      const method = document.getElementById("method").value;
-      const url = document.getElementById("url").value.trim();
-      const siteKey = document.getElementById("siteKey").value.trim();
-
-      const requestBox = document.getElementById("requestBox");
-      const responseBox = document.getElementById("responseBox");
-
-      if (!url || !siteKey) {
-        responseBox.textContent = JSON.stringify({
-          success: false,
-          error: "Both 'url' and 'siteKey' are required."
-        }, null, 2);
-        return;
-      }
-
-      let endpoint = "/turnstile-solver";
-      let fetchOptions = {
-        method,
-        headers: { "Content-Type": "application/json" }
-      };
-
-      if (method === "GET") {
-        endpoint += \`?url=\${encodeURIComponent(url)}&siteKey=\${encodeURIComponent(siteKey)}\`;
-      } else {
-        fetchOptions.body = JSON.stringify({ url, siteKey });
-      }
-
-      requestBox.textContent = JSON.stringify({
-        method,
-        endpoint,
-        ...(fetchOptions.body ? { body: JSON.parse(fetchOptions.body) } : {})
-      }, null, 2);
-
-      responseBox.textContent = "Sending request...";
-
-      try {
-        const res = await fetch(endpoint, fetchOptions);
-        const text = await res.text();
-
-        try {
-          const json = JSON.parse(text);
-          responseBox.textContent = JSON.stringify(json, null, 2);
-        } catch {
-          responseBox.textContent = text;
-        }
-      } catch (err) {
-        responseBox.textContent = JSON.stringify({
-          success: false,
-          error: err.message
-        }, null, 2);
-      }
-    }
-  </script>
-</body>
-</html>`);
-});
-
-/* =========================
-   API ENDPOINT
-========================= */
-
 app.all('/turnstile-solver', async (req, res) => {
     const allowedMethods = ['GET', 'POST', 'PUT'];
     if (!allowedMethods.includes(req.method)) {
@@ -786,64 +66,562 @@ app.all('/turnstile-solver', async (req, res) => {
         return res.status(500).json({ success: false, error: error.message });
     }
 });
-/*app.all("/turnstile-solver", async (req, res) => {
-  const allowedMethods = ["GET", "POST", "PUT"];
 
-  if (!allowedMethods.includes(req.method)) {
-    return res.status(405).json({
-      success: false,
-      error: "Method not allowed",
-      allowed: allowedMethods,
+const runFFmpeg = (m3u8Url, output, headers = {}) =>
+  new Promise((resolve, reject) => {
+    const headerArgs = [];
+    for (const [key, val] of Object.entries(headers)) {
+      headerArgs.push("-headers", `${key}: ${val}\r\n`);
+    }
+
+    const proc = spawn("ffmpeg", [
+      "-y",
+      ...headerArgs,
+      "-i", m3u8Url,
+      "-c", "copy",
+      "-bsf:a", "aac_adtstoasc",
+      "-movflags", "+faststart",
+      "-threads", "0",
+      output,
+    ]);
+
+    proc.stderr.on("data", (data) => {
     });
+
+    proc.on("close", (code) =>
+      code === 0 ? resolve(output) : reject(new Error(`FFmpeg salió con código ${code}`))
+    );
+
+    proc.on("error", reject);
+  });
+
+class HentaiLaDownloader {
+  constructor(options = {}) {
+    this.BASE = "https://cdn.hvidserv.com";
+    this.concurrency = options.concurrency || 32; 
+    this.timeout = options.timeout || 30000;
+
+    this.HEADERS = {
+      "User-Agent":
+        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+      Accept: "",
+      "Accept-Language": "es-419,es;q=0.9",
+      "Accept-Encoding": "identity",
+      Origin: this.BASE,
+      Referer: `${this.BASE}/`,
+      "Sec-Fetch-Dest": "empty",
+      "Sec-Fetch-Mode": "cors",
+      "Sec-Fetch-Site": "same-origin",
+      "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124"',
+      "sec-ch-ua-mobile": "?1",
+      "sec-ch-ua-platform": '"Android"',
+      Connection: "keep-alive",
+      ...(options.headers || {}),
+    };
   }
 
-  const url = req.query.url || req.body.url;
-  const siteKey = req.query.siteKey || req.body.siteKey;
+  formatDate(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${mm}/${dd}/${yy}`;
+  }
 
-  if (!url || !siteKey) {
+  formatTitle(slug = "") {
+    return String(slug)
+      .replace(/-/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase()
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+
+  extractId(input) {
+    const m = String(input).match(/([a-f0-9]{32})/i);
+    return m[1];
+  }
+
+  sanitizeFileName(name = "video") {
+    return name
+      .replace(/[\/:*?"<>|]/g, "")
+      .replace(/\s+/g, "_")
+      .trim();
+  }
+
+  async fetchBuf(url, headers = this.HEADERS) {
+    const res = await fetch(url, { headers });
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  read32(buf, off) {
+    return buf.readUInt32BE(off);
+  }
+
+  write32(buf, off, val) {
+    buf.writeUInt32BE(val >>> 0, off);
+  }
+
+  write64(buf, off, hi, lo) {
+    buf.writeUInt32BE(hi >>> 0, off);
+    buf.writeUInt32BE(lo >>> 0, off + 4);
+  }
+
+  findBox(buf, type, start = 0, end = buf.length) {
+    let i = start;
+    while (i + 8 <= end) {
+      const size = this.read32(buf, i);
+      const name = buf.slice(i + 4, i + 8).toString("ascii");
+      if (name === type) return { offset: i, size };
+      i += Math.max(size, 8);
+    }
+    return null;
+  }
+
+  patchDuration(initBuf, totalSeconds) {
+    const buf = Buffer.from(initBuf);
+
+    const moov = this.findBox(buf, "moov");
+    if (!moov) return buf;
+
+    const moovEnd = moov.offset + moov.size;
+
+    const mvhd = this.findBox(buf, "mvhd", moov.offset + 8, moovEnd);
+    if (mvhd) {
+      const version = buf[mvhd.offset + 8];
+      let timescale, durationOff;
+
+      if (version === 1) {
+        timescale = this.read32(buf, mvhd.offset + 8 + 1 + 3 + 16);
+        durationOff = mvhd.offset + 8 + 1 + 3 + 20;
+        const durationUnits = Math.round(totalSeconds * timescale);
+        this.write64(
+          buf,
+          durationOff,
+          Math.floor(durationUnits / 0x100000000),
+          durationUnits >>> 0
+        );
+      } else {
+        timescale = this.read32(buf, mvhd.offset + 8 + 1 + 3 + 8);
+        durationOff = mvhd.offset + 8 + 1 + 3 + 12;
+        const durationUnits = Math.round(totalSeconds * timescale);
+        this.write32(buf, durationOff, durationUnits);
+      }
+    }
+
+    let search = moov.offset + 8;
+    while (search < moovEnd) {
+      const trak = this.findBox(buf, "trak", search, moovEnd);
+      if (!trak) break;
+
+      const trakEnd = trak.offset + trak.size;
+      const tkhd = this.findBox(buf, "tkhd", trak.offset + 8, trakEnd);
+
+      if (tkhd) {
+        const version = buf[tkhd.offset + 8];
+
+        const mdia = this.findBox(buf, "mdia", trak.offset + 8, trakEnd);
+        if (mdia) {
+          const mdhd = this.findBox(
+            buf,
+            "mdhd",
+            mdia.offset + 8,
+            mdia.offset + mdia.size
+          );
+
+          if (mdhd) {
+            const mdhdV = buf[mdhd.offset + 8];
+            let timescale = 1;
+
+            if (mdhdV === 1) {
+              timescale = this.read32(buf, mdhd.offset + 8 + 1 + 3 + 16);
+            } else {
+              timescale = this.read32(buf, mdhd.offset + 8 + 1 + 3 + 8);
+            }
+
+            const mdhdDurUnits = Math.round(totalSeconds * timescale);
+
+            if (mdhdV === 1) {
+              this.write64(
+                buf,
+                mdhd.offset + 8 + 1 + 3 + 20,
+                Math.floor(mdhdDurUnits / 0x100000000),
+                mdhdDurUnits >>> 0
+              );
+            } else {
+              this.write32(buf, mdhd.offset + 8 + 1 + 3 + 12, mdhdDurUnits);
+            }
+          }
+        }
+
+        if (mvhd) {
+          const mvhdV = buf[mvhd.offset + 8];
+          let movieTS =
+            mvhdV === 1
+              ? this.read32(buf, mvhd.offset + 28)
+              : this.read32(buf, mvhd.offset + 20);
+
+          const units = Math.round(totalSeconds * movieTS);
+
+          if (version === 1) {
+            this.write64(
+              buf,
+              tkhd.offset + 8 + 1 + 3 + 24,
+              Math.floor(units / 0x100000000),
+              units >>> 0
+            );
+          } else {
+            this.write32(buf, tkhd.offset + 8 + 1 + 3 + 16, units);
+          }
+        }
+      }
+
+      search = trak.offset + trak.size;
+    }
+
+    return buf;
+  }
+
+  async getPlaylist(videoId) {
+    const url = `${this.BASE}/m3u8/${videoId}`;
+    const res = await fetch(url, { headers: this.HEADERS });
+    const text = await res.text();
+
+    let initUrl = null;
+    const segments = [];
+    let pendingDuration = null;
+
+    for (const raw of text.split("\n")) {
+      const line = raw.trim();
+
+      if (line.startsWith("#EXT-X-MAP:URI=")) {
+        initUrl = line.match(/URI="([^"]+)"/)?.[1] || null;
+      } else if (line.startsWith("#EXTINF:")) {
+        pendingDuration = parseFloat(line.slice(8));
+      } else if (line.startsWith("http")) {
+        segments.push({ url: line, duration: pendingDuration || 0 });
+        pendingDuration = null;
+      }
+    }
+
+    const totalSeconds = segments.reduce((s, seg) => s + seg.duration, 0);
+    return { initUrl, segments, totalSeconds };
+  }
+
+  async downloadAll(urls, concurrency = this.concurrency) {
+    const results = new Array(urls.length);
+    let idx = 0;
+
+    async function worker(ctx) {
+      while (idx < urls.length) {
+        const i = idx++;
+        results[i] = await ctx.fetchBuf(urls[i].url || urls[i]);
+      }
+    }
+
+    const workers = Array.from({ length: concurrency }, () => worker(this));
+    await Promise.all(workers);
+    return results;
+  }
+
+  async scrape(url) {
+    try {
+      const cleanUrl = url.replace(/\/+$/, "");
+      const parts = cleanUrl.split("/");
+      const episode = Number(parts[parts.length - 1]) || null;
+      const slugIndex = parts.findIndex((v) => v === "media");
+      const rawTitle = slugIndex !== -1 ? parts[slugIndex + 1] : null;
+      const title = this.formatTitle(rawTitle);
+      const dataUrl = `${cleanUrl}/__data.json?x-sveltekit-invalidated=0001`;
+
+      const { data: json } = await axios.get(dataUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0",
+          Accept: "application/json,text/plain",
+          Referer: cleanUrl,
+        },
+        timeout: this.timeout,
+      });
+
+      const dataNode = json?.nodes?.find((v) => v?.type === "data");
+      const arr = dataNode?.data || [];
+
+      const resolve = (value, seen = new WeakSet()) => {
+        if (typeof value === "number") {
+          if (value === -1) return null;
+          if (value >= 0 && value < arr.length) return resolve(arr[value], seen);
+          return value;
+        }
+        if (Array.isArray(value)) return value.map((v) => resolve(v, seen));
+        if (value && typeof value === "object") {
+          if (seen.has(value)) return value;
+          seen.add(value);
+          const out = {};
+          for (const [k, v] of Object.entries(value)) out[k] = resolve(v, seen);
+          return out;
+        }
+        return value;
+      };
+
+      const resolved = arr.map((v) => {
+        try { return resolve(v); } catch { return v; }
+      });
+
+      const episodeObj =
+        resolved.find(
+          (v) =>
+            v &&
+            typeof v === "object" &&
+            (v.id || v.episodeNumber || v.publishedAt || v.filler !== undefined)
+        ) || {};
+
+      const embedsObj =
+        resolved.find(
+          (v) =>
+            v &&
+            typeof v === "object" &&
+            (Array.isArray(v.SUB) || Array.isArray(v.DUB) || Array.isArray(v.RAW))
+        ) || {};
+
+      const downloadsObj =
+        resolved.find(
+          (v) =>
+            v &&
+            typeof v === "object" &&
+            (Array.isArray(v.SUB) || Array.isArray(v.DUB) || Array.isArray(v.RAW)) &&
+            JSON.stringify(v).includes("server")
+        ) || {};
+
+      const getHvidData = (playUrl) => {
+        const id = playUrl?.match(/\/play\/([a-f0-9]+)/i)?.[1] || null;
+        return {
+          id,
+          play: playUrl || null,
+          m3u8: id ? `https://cdn.hvidserv.com/m3u8/${id}` : null,
+          embed: id ? `https://hvidserv.com/embed/${id}` : null,
+        };
+      };
+
+      const dedupeByUrl = (items = []) => {
+        const seen = new Set();
+        return items.filter((item) => {
+          const key = item?.url || item?.play || item?.m3u8;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      };
+
+      const normalizeMirrors = (mirrorRefs) => {
+        if (!Array.isArray(mirrorRefs)) return [];
+        return dedupeByUrl(
+          mirrorRefs
+            .map((m) => resolve(m))
+            .filter((v) => v && typeof v === "object" && v.server && v.url)
+            .map((v) => ({ server: v.server || null, ...getHvidData(v.url) }))
+        );
+      };
+
+      const normalizeDownloads = (downloadRefs) => {
+        if (!Array.isArray(downloadRefs)) return [];
+        return dedupeByUrl(
+          downloadRefs
+            .map((d) => resolve(d))
+            .filter((v) => v && typeof v === "object" && v.server && v.url)
+            .map((v) => ({ server: v.server || null, url: v.url || null }))
+        );
+      };
+
+      const mirrors = {
+        SUB: normalizeMirrors(embedsObj.SUB || []),
+        DUB: normalizeMirrors(embedsObj.DUB || []),
+        RAW: normalizeMirrors(embedsObj.RAW || []),
+      };
+
+      const downloads = {
+        SUB: normalizeDownloads(downloadsObj.SUB || []),
+        DUB: normalizeDownloads(downloadsObj.DUB || []),
+        RAW: normalizeDownloads(downloadsObj.RAW || []),
+      };
+
+      const allMirrorLinks = [...mirrors.SUB, ...mirrors.DUB, ...mirrors.RAW];
+      const allDownloadLinks = [...downloads.SUB, ...downloads.DUB, ...downloads.RAW];
+
+      return {
+        success: true,
+        title,
+        episode,
+        url: cleanUrl,
+        filler: episodeObj.filler ?? null,
+        published: this.formatDate(episodeObj.publishedAt),
+        links: {
+          main: {
+            id: allMirrorLinks[0]?.id || null,
+            play: allMirrorLinks[0]?.play || null,
+            m3u8: allMirrorLinks[0]?.m3u8 || null,
+            embed: allMirrorLinks[0]?.embed || null,
+          },
+          mirrors,
+          downloads: allDownloadLinks,
+        },
+      };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async downloadFromPlayUrl(playUrl, outputFile) {
+    const videoId = this.extractId(playUrl);
+    const { initUrl, segments, totalSeconds } = await this.getPlaylist(videoId);
+    let initBuf = await this.fetchBuf(initUrl);
+    initBuf = this.patchDuration(initBuf, totalSeconds);
+
+    const segBuffers = await this.downloadAll(segments);
+
+    const out = outputFile || `${videoId}.mp4`;
+
+    const ws = fs.createWriteStream(out);
+    const writeChunk = (b) =>
+      new Promise((res, rej) => ws.write(b, (e) => (e ? rej(e) : res())));
+
+    await writeChunk(initBuf);
+    for (const buf of segBuffers) await writeChunk(buf);
+
+    await new Promise((res, rej) => {
+      ws.end();
+      ws.on("finish", res);
+      ws.on("error", rej);
+    });
+
+    const stats = fs.statSync(out);
+
+    return {
+      success: true,
+      id: videoId,
+      file: path.resolve(out),
+      size: +(stats.size / 1024 / 1024).toFixed(2) + " MB",
+      segments: segments.length,
+    };
+  }
+
+  async download(pageUrl, outputFile = null) {
+    const info = await this.scrape(pageUrl);
+    const playUrl = info?.links?.main?.play;
+    const finalName =
+      outputFile ||
+      `${this.sanitizeFileName(info.title || "video")}_ep${info.episode || "1"}.mp4`;
+
+    const downloaded = await this.downloadFromPlayUrl(playUrl, finalName);
+
+    return {
+      success: true,
+      info,
+      download: downloaded,
+    };
+  }
+}
+
+
+const VIDEOS_DIR = path.join(process.cwd(), "videos");
+if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true });
+app.use("/videos", express.static(VIDEOS_DIR));
+const downloadCache = new Map();
+
+app.all("/starlight/hentaidl", async (req, res) => {
+  const url = req.query.url || req.body?.url;
+  const downloader = new HentaiLaDownloader();
+
+  if (!url) {
     return res.status(400).json({
       success: false,
-      error: "Missing required parameters: url and siteKey",
-      example: {
-        GET: "/turnstile-solver?url=https://example.com&siteKey=0x4AAAA...",
-        POST: {
-          url: "https://example.com",
-          siteKey: "0x4AAAA...",
-        },
-      },
+      error: 'Falta el parámetro "url".',
+      example: "GET /starlight/hentaidl?url=https://hentai.la/media/anime-title/1",
     });
   }
-
+  if (downloadCache.has(url)) {
+    const cached = downloadCache.get(url);
+    return res.json({ success: true, cached: true, ...cached });
+  }
   try {
-    const result = await shannz.turnstileMin(url, siteKey);
+    const t0 = Date.now();
+    const info = await downloader.scrape(url);
 
-    if (result) {
-      return res.json({
-        success: true,
-        method: req.method,
-        endpoint: "/turnstile-solver",
-        request: { url, siteKey },
-        data: result,
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        message: "Could not retrieve a valid response from the external service",
-      });
+    if (!info.success) {
+      return res.status(502).json({ success: false, error: "No se pudo obtener info del episodio." });
     }
-  } catch (error) {
-    console.error("Error /turnstile-solver:", error);
 
-    return res.status(500).json({
-      success: false,
-      error: error.message || "Internal server error",
+    const m3u8Url = info.links?.main?.m3u8;
+    if (!m3u8Url) {
+      return res.status(502).json({ success: false, error: "No se encontró m3u8." });
+    }
+
+    const safeName = downloader.sanitizeFileName(info.title || "video");
+    const ep = info.episode || "1";
+    const fileName = `${safeName}_ep${ep}_${Date.now()}.mp4`;
+    const filePath = path.join(VIDEOS_DIR, fileName);
+    const publicUrl = `https://light-slvr.koyeb.app/videos/${fileName}`;
+    const t1 = Date.now();
+
+    await runFFmpeg(m3u8Url, filePath, {
+      "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+      "Origin": "https://cdn.hvidserv.com",
+      "Referer": "https://cdn.hvidserv.com/",
     });
+    if (!fs.existsSync(filePath)) {
+      return res.status(500).json({ success: false, error: "FFmpeg no generó el archivo." });
+    }
+
+    const stat = fs.statSync(filePath);
+    const sizeMB = +(stat.size / 1024 / 1024).toFixed(2);
+
+    const responsePayload = {
+      title: info.title,
+      episode: info.episode,
+      filler: info.filler,
+      published: info.published,
+      video: {
+        url: publicUrl,
+        fileName,
+        size: `${sizeMB} MB`,
+        m3u8: m3u8Url,
+      },
+    };
+    downloadCache.set(url, responsePayload);
+    cleanOldVideos(VIDEOS_DIR, 2 * 60 * 60 * 1000);
+
+    return res.json({ success: true, cached: false, ...responsePayload });
+
+  } catch (err) {
+    console.error("[error]", err.message);
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
   }
 });
-*/
-/* =========================
-   INFO GENERAL API
-========================= */
+
+/**
+ * Limpia videos más viejos que maxAgeMs del directorio dado.
+ * Se ejecuta en background, sin bloquear la respuesta.
+ */
+function cleanOldVideos(dir, maxAgeMs) {
+  try {
+    const now = Date.now();
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const fp = path.join(dir, file);
+      const stat = fs.statSync(fp);
+      if (now - stat.mtimeMs > maxAgeMs) {
+        fs.unlinkSync(fp);
+        console.log(`[clean] Eliminado: ${file}`);
+      }
+    }
+  } catch (e) {
+    // silencioso
+  }
+}
+
 app.get("/api", (req, res) => {
   res.json({
     success: true,
@@ -852,6 +630,7 @@ app.get("/api", (req, res) => {
     endpoints: {
       playground: "/",
       solver: "/turnstile-solver",
+      hentaidl: "/starlight/hentaidl",
     },
     methods: ["GET", "POST", "PUT"],
     examples: {
@@ -865,7 +644,8 @@ app.get("/api", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost: ${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Playground: http://localhost:${PORT}`);
   console.log(`Endpoint: http://localhost:${PORT}/turnstile-solver`);
+  console.log(`HentaiDL:  http://localhost:${PORT}/starlight/hentaidl`);
 });
