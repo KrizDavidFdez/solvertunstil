@@ -46,6 +46,10 @@ const shannz = {
     callBypassAPI("solve-turnstile-min", { url, siteKey }),
 };
 
+/* =========================
+   API ENDPOINT TURNSTILE
+========================= */
+
 app.all('/turnstile-solver', async (req, res) => {
     const allowedMethods = ['GET', 'POST', 'PUT'];
     if (!allowedMethods.includes(req.method)) {
@@ -67,6 +71,15 @@ app.all('/turnstile-solver', async (req, res) => {
     }
 });
 
+/* =========================
+   FFMPEG ULTRARAPIDO
+========================= */
+
+/**
+ * Usa FFmpeg directamente desde la URL m3u8 remota.
+ * No descarga segmentos manualmente — FFmpeg los descarga en paralelo internamente.
+ * Resultado: ensamblado instantáneo y ultrarrápido.
+ */
 const runFFmpeg = (m3u8Url, output, headers = {}) =>
   new Promise((resolve, reject) => {
     const headerArgs = [];
@@ -86,6 +99,7 @@ const runFFmpeg = (m3u8Url, output, headers = {}) =>
     ]);
 
     proc.stderr.on("data", (data) => {
+      // descomenta para debug: console.error("[ffmpeg]", data.toString());
     });
 
     proc.on("close", (code) =>
@@ -98,7 +112,7 @@ const runFFmpeg = (m3u8Url, output, headers = {}) =>
 class HentaiLaDownloader {
   constructor(options = {}) {
     this.BASE = "https://cdn.hvidserv.com";
-    this.concurrency = options.concurrency || 32; 
+    this.concurrency = options.concurrency || 32; // máxima concurrencia
     this.timeout = options.timeout || 30000;
 
     this.HEADERS = {
@@ -523,10 +537,19 @@ class HentaiLaDownloader {
   }
 }
 
+/* =========================
+   HENTAIDL ULTRA-RAPIDO
+   Estrategia:
+   1. Scrape info (instantáneo, ~1s)
+   2. Lanzar FFmpeg directamente sobre el m3u8 remoto (sin descargar segmentos manualmente)
+   3. Responder con la URL apenas FFmpeg termine — FFmpeg descarga todo en paralelo internamente
+========================= */
 
 const VIDEOS_DIR = path.join(process.cwd(), "videos");
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true });
 app.use("/videos", express.static(VIDEOS_DIR));
+
+// Cache en memoria para evitar redescargar el mismo episodio
 const downloadCache = new Map();
 
 app.all("/starlight/hentaidl", async (req, res) => {
@@ -540,11 +563,16 @@ app.all("/starlight/hentaidl", async (req, res) => {
       example: "GET /starlight/hentaidl?url=https://hentai.la/media/anime-title/1",
     });
   }
+
+  // Si ya está en caché, responder al instante
   if (downloadCache.has(url)) {
     const cached = downloadCache.get(url);
+    console.log(`[cache] HIT → ${cached.video.url}`);
     return res.json({ success: true, cached: true, ...cached });
   }
+
   try {
+    // PASO 1: Scrape ultrarrápido (~1s)
     const t0 = Date.now();
     const info = await downloader.scrape(url);
 
@@ -561,7 +589,13 @@ app.all("/starlight/hentaidl", async (req, res) => {
     const ep = info.episode || "1";
     const fileName = `${safeName}_ep${ep}_${Date.now()}.mp4`;
     const filePath = path.join(VIDEOS_DIR, fileName);
-    const publicUrl = `https://light-slvr.koyeb.app/videos/${fileName}`;
+    const publicUrl = `https://apis-starlights-team.koyeb.app/videos/${fileName}`;
+
+    console.log(`[scrape] OK en ${Date.now() - t0}ms → ${m3u8Url}`);
+    console.log(`[ffmpeg] Iniciando ensamblado → ${filePath}`);
+
+    // PASO 2: FFmpeg descarga y ensambla el m3u8 directamente (máxima velocidad)
+    // FFmpeg maneja internamente la descarga paralela de segmentos
     const t1 = Date.now();
 
     await runFFmpeg(m3u8Url, filePath, {
@@ -569,6 +603,9 @@ app.all("/starlight/hentaidl", async (req, res) => {
       "Origin": "https://cdn.hvidserv.com",
       "Referer": "https://cdn.hvidserv.com/",
     });
+
+    console.log(`[ffmpeg] Ensamblado en ${Date.now() - t1}ms`);
+
     if (!fs.existsSync(filePath)) {
       return res.status(500).json({ success: false, error: "FFmpeg no generó el archivo." });
     }
@@ -588,7 +625,11 @@ app.all("/starlight/hentaidl", async (req, res) => {
         m3u8: m3u8Url,
       },
     };
+
+    // Guardar en caché para peticiones futuras (respuesta instantánea)
     downloadCache.set(url, responsePayload);
+
+    // Limpiar archivos viejos en background (>2h) para no llenar el disco
     cleanOldVideos(VIDEOS_DIR, 2 * 60 * 60 * 1000);
 
     return res.json({ success: true, cached: false, ...responsePayload });
@@ -622,6 +663,9 @@ function cleanOldVideos(dir, maxAgeMs) {
   }
 }
 
+/* =========================
+   INFO GENERAL API
+========================= */
 app.get("/api", (req, res) => {
   res.json({
     success: true,
