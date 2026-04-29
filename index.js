@@ -6,13 +6,16 @@ const path = require("path");
 const axios = require("axios");
 const http = require("http");
 const https = require("https");
+const { PassThrough, pipeline } = require("stream");
+const util = require("util");
+const streamPipeline = util.promisify(pipeline);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Agentes con keep-alive para reutilizar conexiones y máxima velocidad
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+// Agentes optimizados: keep-alive + maxSockets razonable para no matar el server
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 32, maxFreeSockets: 10, timeout: 30000, freeSocketTimeout: 30000 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 32, maxFreeSockets: 10, timeout: 30000, freeSocketTimeout: 30000 });
 
 const BASE_URL_BYPASS = "https://shannz.zone.id";
 
@@ -37,8 +40,7 @@ async function callBypassAPI(endpoint, data = {}) {
 }
 
 const shannz = {
-  turnstileMin: (url, siteKey) =>
-    callBypassAPI("solve-turnstile-min", { url, siteKey }),
+  turnstileMin: (url, siteKey) => callBypassAPI("solve-turnstile-min", { url, siteKey }),
 };
 
 app.all('/turnstile-solver', async (req, res) => {
@@ -63,9 +65,9 @@ app.all('/turnstile-solver', async (req, res) => {
 class HentaiLaDownloader {
   constructor(options = {}) {
     this.BASE = "https://cdn.hvidserv.com";
-    // MÁXIMA CONCURRENCIA - 64 descargas simultáneas
-    this.concurrency = options.concurrency || 64;
-    this.timeout = options.timeout || 60000;
+    // 16 workers = sweet spot entre velocidad y estabilidad en Koyeb
+    this.concurrency = options.concurrency || 16;
+    this.timeout = options.timeout || 30000;
 
     this.HEADERS = {
       "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
@@ -113,13 +115,28 @@ class HentaiLaDownloader {
     return name.replace(/[\/:*?"<>|]/g, "").replace(/\s+/g, "_").trim();
   }
 
-  // DESCARGA ULTRA RÁPIDA con fetch y arrayBuffer
-  async fetchBuf(url, headers = this.HEADERS) {
+  // STREAMING: devuelve el response body como stream en lugar de buffer
+  async fetchStream(url, headers = this.HEADERS) {
     const res = await fetch(url, { 
       headers,
       agent: url.startsWith('https:') ? httpsAgent : httpAgent
     });
-    return Buffer.from(await res.arrayBuffer());
+    return res.body; // ReadableStream de Node
+  }
+
+  // Descarga rápida con axios stream para mejor control
+  async fetchStreamAxios(url, headers = this.HEADERS) {
+    const response = await axios({
+      method: 'GET',
+      url,
+      headers,
+      responseType: 'stream',
+      timeout: this.timeout,
+      httpAgent,
+      httpsAgent,
+      maxRedirects: 5,
+    });
+    return response.data;
   }
 
   read32(buf, off) {
@@ -152,7 +169,7 @@ class HentaiLaDownloader {
     if (!moov) return buf;
     const moovEnd = moov.offset + moov.size;
     const mvhd = this.findBox(buf, "mvhd", moov.offset + 8, moovEnd);
-    
+
     if (mvhd) {
       const version = buf[mvhd.offset + 8];
       let timescale, durationOff;
@@ -214,10 +231,7 @@ class HentaiLaDownloader {
 
   async getPlaylist(videoId) {
     const url = `${this.BASE}/m3u8/${videoId}`;
-    const res = await fetch(url, { 
-      headers: this.HEADERS,
-      agent: httpsAgent 
-    });
+    const res = await fetch(url, { headers: this.HEADERS, agent: httpsAgent });
     const text = await res.text();
 
     let initUrl = null;
@@ -240,29 +254,42 @@ class HentaiLaDownloader {
     return { initUrl, segments, totalSeconds };
   }
 
-  // DESCARGA MASIVAMENTE PARALELA - SIN LÍMITES DE CONCURRENCIA MANUALES
+  // DESCARGA CONTROLADA: pool de workers que no saturan memoria
   async downloadAll(urls, concurrency = this.concurrency) {
-    // Dividimos en chunks pero con Promise.all para máxima velocidad
     const results = new Array(urls.length);
-    
-    async function worker(ctx, start, end) {
-      const promises = [];
-      for (let i = start; i < end && i < urls.length; i++) {
-        promises.push(
-          ctx.fetchBuf(urls[i].url || urls[i]).then(buf => {
-            results[i] = buf;
-          })
-        );
-      }
-      await Promise.all(promises);
+
+    const worker = async (ctx, batch) => {
+      await Promise.all(batch.map(async ({ url, index }) => {
+        try {
+          const res = await fetch(url, { 
+            headers: ctx.HEADERS,
+            agent: url.startsWith('https:') ? httpsAgent : httpAgent
+          });
+          results[index] = Buffer.from(await res.arrayBuffer());
+        } catch (e) {
+          results[index] = null;
+        }
+      }));
+    };
+
+    // Procesar en batches de tamaño 'concurrency'
+    const batches = [];
+    for (let i = 0; i < urls.length; i++) {
+      const batchIdx = Math.floor(i / concurrency);
+      if (!batches[batchIdx]) batches[batchIdx] = [];
+      batches[batchIdx].push({ url: urls[i].url || urls[i], index: i });
     }
 
-    // Procesamos en batches para no saturar memoria pero con máxima paralelización
-    const batchSize = concurrency;
-    for (let i = 0; i < urls.length; i += batchSize) {
-      await worker(this, i, i + batchSize);
+    for (const batch of batches) {
+      await worker(this, batch);
     }
-    
+
+    // Reintentar fallidos una vez
+    const failed = results.map((v, i) => v === null ? i : -1).filter(i => i !== -1);
+    if (failed.length > 0) {
+      await worker(this, failed.map(i => ({ url: urls[i].url || urls[i], index: i })));
+    }
+
     return results;
   }
 
@@ -366,29 +393,29 @@ class HentaiLaDownloader {
     }
   }
 
-  // ENSAMBLAJE ULTRA RÁPIDO CON STREAMS
+  // DESCARGA A DISCO con concurrencia controlada (para el endpoint /hentaidl)
   async downloadFromPlayUrl(playUrl, outputFile) {
     const videoId = this.extractId(playUrl);
     if (!videoId) throw new Error("ID de video no válido");
-    
+
     const { initUrl, segments, totalSeconds } = await this.getPlaylist(videoId);
-    
-    // Descargar init y segments en paralelo máximo
-    const [initBuf, ...segBuffers] = await Promise.all([
-      this.fetchBuf(initUrl),
-      ...segments.map(seg => this.fetchBuf(seg.url))
-    ]);
 
-    const patchedInit = this.patchDuration(initBuf, totalSeconds);
+    // Descargar init primero (es pequeño)
+    const initRes = await fetch(initUrl, { headers: this.HEADERS, agent: httpsAgent });
+    let initBuf = Buffer.from(await initRes.arrayBuffer());
+    initBuf = this.patchDuration(initBuf, totalSeconds);
+
+    // Descargar segments en batches controlados
+    const segBuffers = await this.downloadAll(segments, this.concurrency);
+
     const out = outputFile || `${videoId}.mp4`;
-
-    // ESCRITURA DIRECTA SIN DELAYS
     const ws = fs.createWriteStream(out);
-    const chunks = [patchedInit, ...segBuffers];
-    for (const chunk of chunks) {
-      ws.write(chunk);
+
+    ws.write(initBuf);
+    for (const buf of segBuffers) {
+      if (buf) ws.write(buf);
     }
-    
+
     await new Promise((res, rej) => {
       ws.end();
       ws.on("finish", res);
@@ -405,12 +432,39 @@ class HentaiLaDownloader {
     };
   }
 
-  async download(pageUrl, outputFile = null) {
-    const info = await this.scrape(pageUrl);
-    const playUrl = info?.links?.main?.play;
-    const finalName = outputFile || `${this.sanitizeFileName(info.title || "video")}_ep${info.episode || "1"}.mp4`;
-    const downloaded = await this.downloadFromPlayUrl(playUrl, finalName);
-    return { success: true, info, download: downloaded };
+  // STREAMING DIRECTO: no guarda en disco, envía al cliente mientras descarga
+  async streamFromPlayUrl(playUrl, res) {
+    const videoId = this.extractId(playUrl);
+    if (!videoId) throw new Error("ID de video no válido");
+
+    const { initUrl, segments, totalSeconds } = await this.getPlaylist(videoId);
+
+    // Headers para streaming progresivo MP4
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', `inline; filename="${videoId}.mp4"`);
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    // Descargar init, parchear y enviar inmediatamente
+    const initRes = await fetch(initUrl, { headers: this.HEADERS, agent: httpsAgent });
+    let initBuf = Buffer.from(await initRes.arrayBuffer());
+    initBuf = this.patchDuration(initBuf, totalSeconds);
+    res.write(initBuf);
+
+    // Stream segments en orden usando batches controlados
+    const concurrency = this.concurrency;
+    for (let i = 0; i < segments.length; i += concurrency) {
+      const batch = segments.slice(i, i + concurrency);
+      const streams = await Promise.all(
+        batch.map(seg => this.fetchStreamAxios(seg.url))
+      );
+
+      for (const stream of streams) {
+        await streamPipeline(stream, res, { end: false });
+      }
+    }
+
+    res.end();
+    return { success: true, id: videoId, segments: segments.length };
   }
 }
 
@@ -418,10 +472,12 @@ const VIDEOS_DIR = path.join(process.cwd(), "videos");
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR, { recursive: true });
 app.use("/videos", express.static(VIDEOS_DIR));
 
+// ENDPOINT DE DESCARGA RÁPIDA A DISCO
 app.all("/starlight/hentaidl", async (req, res) => {
   const url = req.query.url || req.body?.url;
-  const downloader = new HentaiLaDownloader({ concurrency: 64 }); // 64 workers
-  
+  const streamMode = req.query.stream === "1" || req.body?.stream === "1";
+  const downloader = new HentaiLaDownloader({ concurrency: 16 });
+
   if (!url) {
     return res.status(400).json({
       success: false,
@@ -441,24 +497,32 @@ app.all("/starlight/hentaidl", async (req, res) => {
       return res.status(502).json({ success: false, error: "No se encontró URL de reproducción." });
     }
 
+    // MODO STREAMING DIRECTO - sin guardar en disco, ultra rápido
+    if (streamMode) {
+      console.log(`[STREAM] Streaming directo: ${info.title} ep${info.episode}`);
+      await downloader.streamFromPlayUrl(playUrl, res);
+      return;
+    }
+
+    // MODO DESCARGA A DISCO
     const safeName = downloader.sanitizeFileName(info.title || "video");
     const ep = info.episode || "1";
     const fileName = `${safeName}_ep${ep}_${Date.now()}.mp4`;
     const filePath = path.join(VIDEOS_DIR, fileName);
 
-    console.log(`[DOWNLOAD] Iniciando descarga ultra-rápida → ${filePath}`);
+    console.log(`[DOWNLOAD] Iniciando descarga rápida → ${filePath}`);
     const startTime = Date.now();
-    
+
     const result = await downloader.downloadFromPlayUrl(playUrl, filePath);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
     if (!result.success || !fs.existsSync(filePath)) {
       return res.status(500).json({ success: false, error: "Error al ensamblar el video." });
     }
-    
+
     const stat = fs.statSync(filePath);
     const sizeMB = +(stat.size / 1024 / 1024).toFixed(2);
-    
+
     return res.json({
       success: true,
       title: info.title,
@@ -482,27 +546,95 @@ app.all("/starlight/hentaidl", async (req, res) => {
   }
 });
 
+// ENDPOINT DE STREAMING DIRECTO - URL limpia para reproducir
+app.get("/starlight/stream", async (req, res) => {
+  const url = req.query.url;
+  const downloader = new HentaiLaDownloader({ concurrency: 16 });
+
+  if (!url) {
+    return res.status(400).json({ success: false, error: 'Falta el parámetro "url".' });
+  }
+
+  try {
+    const info = await downloader.scrape(url);
+    if (!info.success) {
+      return res.status(502).json({ success: false, error: "No se pudo obtener info." });
+    }
+
+    const playUrl = info.links?.main?.play;
+    if (!playUrl) {
+      return res.status(502).json({ success: false, error: "No se encontró URL de reproducción." });
+    }
+
+    await downloader.streamFromPlayUrl(playUrl, res);
+  } catch (err) {
+    console.error("[STREAM ERROR]", err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+});
+
+// STREAMING DE ARCHIVOS GUARDADOS - usar stream en lugar de sendFile
+app.get("/videos/:file", (req, res) => {
+  const filePath = path.join(VIDEOS_DIR, req.params.file);
+
+  // Seguridad básica
+  if (!filePath.startsWith(VIDEOS_DIR) || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "Video no encontrado" });
+  }
+
+  const stat = fs.statSync(filePath);
+  const range = req.headers.range;
+
+  if (range) {
+    const parts = range.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+    const chunksize = (end - start) + 1;
+    const file = fs.createReadStream(filePath, { start, end });
+
+    res.writeHead(206, {
+      'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': chunksize,
+      'Content-Type': 'video/mp4',
+    });
+    file.pipe(res);
+  } else {
+    res.writeHead(200, {
+      'Content-Length': stat.size,
+      'Content-Type': 'video/mp4',
+      'Accept-Ranges': 'bytes',
+    });
+    fs.createReadStream(filePath).pipe(res);
+  }
+});
+
 app.get("/api", (req, res) => {
   res.json({
     success: true,
-    name: "Turnstile Solver API - ULTRA FAST",
-    version: "2.0.0",
+    name: "Turnstile Solver API - ULTRA FAST v3",
+    version: "3.0.0",
     endpoints: {
       playground: "/",
       solver: "/turnstile-solver",
       hentaidl: "/starlight/hentaidl",
+      stream: "/starlight/stream?url=...",
     },
     methods: ["GET", "POST", "PUT"],
     examples: {
-      get: "/turnstile-solver?url=https://example.com&siteKey=0x4AAAA...",
-      post: { url: "https://example.com", siteKey: "0x4AAAA..." },
+      download: "/starlight/hentaidl?url=https://hentai.la/media/title/1",
+      stream: "/starlight/stream?url=https://hentai.la/media/title/1",
+      direct_stream: "/starlight/hentaidl?url=https://hentai.la/media/title/1&stream=1",
     },
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server ULTRA FAST running on http://localhost:${PORT}`);
+  console.log(`🚀 Server ULTRA FAST v3 running on http://localhost:${PORT}`);
   console.log(`⚡ Playground: http://localhost:${PORT}`);
   console.log(`🔓 Solver: http://localhost:${PORT}/turnstile-solver`);
   console.log(`📥 HentaiDL: http://localhost:${PORT}/starlight/hentaidl`);
+  console.log(`▶️  Stream: http://localhost:${PORT}/starlight/stream?url=...`);
 });
